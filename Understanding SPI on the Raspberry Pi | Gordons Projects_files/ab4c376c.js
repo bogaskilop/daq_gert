@@ -1,8 +1,0 @@
-addComment={moveForm:function(d,f,i,c){var m=this,a,h=m.I(d),b=m.I(i),l=m.I("cancel-comment-reply-link"),j=m.I("comment_parent"),k=m.I("comment_post_ID");if(!h||!b||!l||!j){return}m.respondId=i;c=c||false;if(!m.I("wp-temp-form-div")){a=document.createElement("div");a.id="wp-temp-form-div";a.style.display="none";b.parentNode.insertBefore(a,b)}h.parentNode.insertBefore(b,h.nextSibling);if(k&&c){k.value=c}j.value=f;l.style.display="";l.onclick=function(){var n=addComment,e=n.I("wp-temp-form-div"),o=n.I(n.respondId);if(!e||!o){return}n.I("comment_parent").value="0";e.parentNode.insertBefore(o,e);e.parentNode.removeChild(e);this.style.display="none";this.onclick=null;return false};try{m.I("comment").focus()}catch(g){}return false},I:function(a){return document.getElementById(a)}};;function weaveriip_ToggleDIV(his,me,show,hide,text){if(his.style.display!='none'){his.style.display='none';if(text=='img'){me.innerHTML='<img src="'+show+'" />';}else{me.innerHTML='<span class="weaveriip_showhide_show">'+show+'</span>';}}else{his.style.display='';if(text=='img'){me.innerHTML='<img src="'+hide+'" />';}else{me.innerHTML='<span class="weaveriip_showhide_hide">'+hide+'</span>';}}}
-function weaverii_ToggleMenu(his,me,show,hide,slide){if(his.style.display!='none'){me.innerHTML=show;if(slide)
-jQuery(his).slideUp('normal');else
-his.style.display='none';}else{me.innerHTML=hide;if(slide)
-jQuery(his).slideDown('normal');else
-his.style.display='block';}}
-function weaverii_fixVideo(myframe,vert)
-{var iframeW=myframe.clientWidth;myframe.height=iframeW*vert;}
