@@ -149,7 +149,7 @@ typedef struct bmcdata {
 int get_data_sample(void) {
     int i;
 
-    for (i = 0; i < 16; i++) { // 16 samples per reading to smooth out PWM
+    for (i = 0; i < 1; i++) { // several samples per reading
         bmc.pv_voltage = lp_filter(get_adc_volts(PVV_C), PVV_C, TRUE);
         bmc.cc_voltage = lp_filter(get_adc_volts(CCV_C), CCV_C, TRUE);
         bmc.input_voltage = lp_filter(get_adc_volts(INV_C), INV_C, TRUE);

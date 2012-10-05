@@ -53,7 +53,7 @@ FFLAGS=
 ASFLAGS=
 
 # Link Libraries and Options
-LDLIBSOPTIONS=-lcomedi -lm   
+LDLIBSOPTIONS=-lcomedi -lm
 
 # Build Targets
 .build-conf: ${BUILD_SUBPROJECTS}
@@ -66,12 +66,12 @@ ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/bmc: ${OBJECTFILES}
 ${OBJECTDIR}/_ext/1472/bmc.o: ../bmc.c 
 	${MKDIR} -p ${OBJECTDIR}/_ext/1472
 	${RM} $@.d
-	$(COMPILE.c) -g   -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1472/bmc.o ../bmc.c
+	$(COMPILE.c) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1472/bmc.o ../bmc.c
 
 ${OBJECTDIR}/daq.o: daq.c 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.c) -g  -MMD -MP -MF $@.d -o ${OBJECTDIR}/daq.o daq.c
+	$(COMPILE.c) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/daq.o daq.c
 
 # Subprojects
 .build-subprojects:
