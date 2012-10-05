@@ -41,8 +41,6 @@
           <linkerLibItems>
             <linkerLibLibItem>comedi</linkerLibLibItem>
             <linkerLibStdlibItem>Mathematics</linkerLibStdlibItem>
-            <linkerOptionItem>`pkg-config --libs x11`</linkerOptionItem>
-            <linkerOptionItem>`pkg-config --libs xaw7`</linkerOptionItem>
           </linkerLibItems>
         </linkerTool>
       </compileType>
