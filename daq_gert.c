@@ -505,8 +505,8 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
 
         if (data[0] & 0xff) {
             /* OUT testing with gpio pins  */
-            digitalWriteWPi(0, s->state & 0xff);
-            digitalWriteWPi(1, s->state & 0xff);
+            digitalWriteWPi(0, s->state & 0x01);
+            digitalWriteWPi(1, (s->state & 0x02)>>1);
         }
     }
 

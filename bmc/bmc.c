@@ -31,6 +31,7 @@ int main(int argc, char *argv[]) {
  	put_dio_bit(0, bmc.datain.D0);
     	put_dio_bit(1, bmc.datain.D1);
         usleep(49999);
+	if (bmc.datain.D0)
     }
     return 0;
 }
