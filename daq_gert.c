@@ -242,6 +242,7 @@ int (*digitalRead) (int pin);
 static volatile uint32_t *gpio;
 
 /* Global for the RPi board rev */
+extern unsigned int system_rev; // from the kernel symbol table export */
 static unsigned int RPisys_rev;
 
 /*
@@ -251,7 +252,7 @@ static unsigned int RPisys_rev;
 
  pinToGpio:
       Take a Wiring pin (0 through X) and re-map it to the BCM_GPIO pin
-      Cope for 2 different board revieions here
+      Cope for 2 different board revisions here
  */
 static int *pinToGpio;
 
@@ -414,7 +415,6 @@ int digitalReadGpio(int pin) {
  *	Revision is currently 1 or 2. -1 is returned on error.
  *********************************************************************************
  */
-extern unsigned int system_rev;
 
 int piBoardRev(struct comedi_device *dev) {
     int r = -1;
@@ -423,9 +423,6 @@ int piBoardRev(struct comedi_device *dev) {
     if (boardRev != -1)
         return boardRev;
 
-    /* Use the kernel system_rev EXPORT_SYMBOL */
-    RPisys_rev = system_rev;
-
     dev_info(dev->class_dev, "RPi Board Rev %u\n", RPisys_rev);
     r = RPisys_rev;
 
@@ -433,7 +430,7 @@ int piBoardRev(struct comedi_device *dev) {
         return -1;
     }
 
-    /**/ if ((r == 2) || (r == 3))
+    if ((r == 2) || (r == 3))
         boardRev = 1;
     else if ((r == 4) || (r == 5) || (r == 6))
         boardRev = 2;
@@ -506,7 +503,7 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
         if (data[0] & 0xff) {
             /* OUT testing with gpio pins  */
             digitalWriteWPi(0, s->state & 0x01);
-            digitalWriteWPi(1, (s->state & 0x02)>>1);
+            digitalWriteWPi(1, (s->state & 0x02) >> 1);
         }
     }
 
@@ -557,11 +554,6 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     return n;
 }
 
-static void daqgert_ai_config(struct comedi_device *dev,
-        struct comedi_subdevice *s) {
-    /* SPI data transfers */
-}
-
 /*
  * This function sets the ALT mode on the SPI pins so that we can use them with
  * the SPI hardware.
@@ -584,29 +576,77 @@ static void bcm2708_init_pinmode(void) {
 #undef SET_GPIO_ALT
 }
 
+static int bcm2708_check_pinmode(void) {
+#define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
+#define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
+
+    int pin;
+
+    /* SPI is on GPIO 7..11 */
+    for (pin = 7; pin <= 11; pin++) {
+        INP_GPIO(pin); /* set mode to GPIO input first */
+        SET_GPIO_ALT(pin, 0); /* set mode to ALT 0 */
+    }
+
+#undef INP_GPIO
+#undef SET_GPIO_ALT
+    return TRUE; // lets just say it works for now */
+}
+
+static void daqgert_ai_config(struct comedi_device *dev,
+        struct comedi_subdevice *s) {
+    /* SPI data transfers */
+    bcm2708_init_pinmode(); /* for access to the ADC/DAC later */
+}
+
 static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it) {
     const struct daqgert_board *thisboard = comedi_board(dev);
     struct comedi_subdevice *s;
-    int ret;
+    int ret, num_subdev = 1;
+
+    /* Use the kernel system_rev EXPORT_SYMBOL */
+    RPisys_rev = system_rev; /* what board are we running on? */
+    if (RPisys_rev < 2) {
+        dev_err(dev->class_dev, "Invalid RPi board revision! %u\n", RPisys_rev);
+        return -EINVAL;
+    }
 
     gpio = ioremap(GPIO_BASE, SZ_16K); /* lets get access to the GPIO base */
     if (!gpio) {
         dev_err(dev->class_dev, "Invalid io base address!\n");
         return -EINVAL;
     }
-
     dev->iobase = GPIO_BASE; /* filler */
 
-    bcm2708_init_pinmode(); /* for access to the ADC/DAC later */
+    if (bcm2708_check_pinmode()) num_subdev = 2;
     wiringPiSetup(dev); /* setup the pin array */
     /* 4 pins for testing  */
     pinModeWPi(8, INPUT);
     pinModeWPi(9, INPUT);
+    pinModeWPi(10, INPUT);
+    pinModeWPi(11, INPUT);
+    pinModeWPi(12, INPUT);
+    pinModeWPi(13, INPUT);
+    pinModeWPi(14, INPUT);
+    pinModeWPi(15, INPUT);
+    pinModeWPi(16, INPUT);
+    if (RPisys_rev > 3) { /* This a Rev 2 board "I hope" */
+        pinModeWPi(17, INPUT);
+        pinModeWPi(18, INPUT);
+        pinModeWPi(19, INPUT);
+        pinModeWPi(20, INPUT);
+    }
     pinModeWPi(0, OUTPUT);
     pinModeWPi(1, OUTPUT);
+    pinModeWPi(2, OUTPUT);
+    pinModeWPi(3, OUTPUT);
+    pinModeWPi(4, OUTPUT);
+    pinModeWPi(5, OUTPUT);
+    pinModeWPi(6, OUTPUT);
+    pinModeWPi(7, OUTPUT);
     dev->board_name = thisboard->name;
 
-    ret = comedi_alloc_subdevices(dev, 2);
+    ret = comedi_alloc_subdevices(dev, num_subdev);
     if (ret)
         return ret;
 
@@ -622,17 +662,18 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     s->state = 0;
     s->io_bits = 0x00ff;
 
-    /* daq-gert ai */
-    s = &dev->subdevices[1];
-    s->type = COMEDI_SUBD_AI;
-    /* we support single-ended (ground)  */
-    s->subdev_flags = SDF_READABLE | SDF_GROUND;
-    s->n_chan = 16;
-    s->maxdata = (1 << 10) - 1;
-    s->range_table = &range_unipolar5;
-    s->insn_read = daqgert_ai_rinsn;
-
-    daqgert_ai_config(dev, s);
+    if (num_subdev > 1) { /* we have the SPI ADC DAC on board */
+        /* daq-gert ai */
+        s = &dev->subdevices[1];
+        daqgert_ai_config(dev, s); /* config SPI ports for ai/ao use */
+        s->type = COMEDI_SUBD_AI;
+        /* we support single-ended (ground)  */
+        s->subdev_flags = SDF_READABLE | SDF_GROUND;
+        s->n_chan = 16;
+        s->maxdata = (1 << 10) - 1;
+        s->range_table = &range_unipolar5;
+        s->insn_read = daqgert_ai_rinsn;
+    }
 
     dev_info(dev->class_dev, "%s: %s, iobase 0x%lx, ioremap 0x%lx\n",
             dev->driver->driver_name,
