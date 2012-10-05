@@ -8,6 +8,12 @@ int range_ai = 0; /* more on this later */
 int aref_ai = AREF_GROUND; /* more on this later */
 int maxdata_ai, ranges_ai, channels_ai;
 
+int subdev_ao = 0; /* change this to your input subdevice */
+int chan_ao = 0; /* change this to your channel */
+int range_ao = 0; /* more on this later */
+int aref_ao = AREF_GROUND; /* more on this later */
+int maxdata_ao, ranges_ao, channels_ao;
+
 int subdev_dio = 0; /* change this to your input subdevice */
 int chan_dio = 0; /* change this to your channel */
 int range_dio = 0; /* more on this later */
@@ -33,11 +39,17 @@ int init_daq(double min_range, double max_range) {
 
     subdev_ai = comedi_find_subdevice_by_type(it, COMEDI_SUBD_AI, subdev_ai);
     if (subdev_ai < 0) {
-        return -1;
+        return -2;
         ADC_OPEN = FALSE;
     }
 
-    printf("Subdev  %i ", subdev_ai);
+    subdev_ao = comedi_find_subdevice_by_type(it, COMEDI_SUBD_AO, subdev_ao);
+    if (subdev_ao < 0) {
+        return -3;
+        ADC_OPEN = FALSE;
+    }
+
+    printf("Subdev AI %i ", subdev_ai);
     channels_ai = comedi_get_n_channels(it, subdev_ai);
     printf("Analog  Channels %i ", channels_ai);
     maxdata_ai = comedi_get_maxdata(it, subdev_ai, i);
@@ -49,6 +61,14 @@ int init_daq(double min_range, double max_range) {
     ad_range->max = max_range;
     printf(": ad_range .min = %.1f, max = %.1f\n", ad_range->min,
             ad_range->max);
+
+    printf("Subdev AO %i ", subdev_ao);
+    channels_ao = comedi_get_n_channels(it, subdev_ao);
+    printf("Analog  Channels %i ", channels_ao);
+    maxdata_ao = comedi_get_maxdata(it, subdev_ao, i);
+    printf("Maxdata %i ", maxdata_ao);
+    ranges_ao = comedi_get_n_ranges(it, subdev_ao, i);
+    printf("Ranges %i \n", ranges_ao);
     ADC_OPEN = TRUE;
     return 0;
 }
@@ -185,7 +205,7 @@ double lp_filter(double new, int bn, int slow) // low pass filter, slow rate of 
     static double smooth[LPCHANC] = {0};
     double lp_speed, lp_x;
 
-    if ((bn >= LPCHANC)||(bn<0))        // check for proper array position
+    if ((bn >= LPCHANC) || (bn < 0)) // check for proper array position
         return new;
     if (slow) {
         lp_speed = 0.033;

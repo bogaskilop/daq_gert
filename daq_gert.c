@@ -555,35 +555,33 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
 }
 
 static int daqgert_ao_winsn(struct comedi_device *dev,
-                         struct comedi_subdevice *s,
-                         struct comedi_insn *insn, unsigned int *data)
-{
-       unsigned int n,junk;
-       unsigned int chan;
+        struct comedi_subdevice *s,
+        struct comedi_insn *insn, unsigned int *data) {
+    unsigned int n, junk;
+    unsigned int chan;
 
-       chan = CR_CHAN(insn->chanspec);
+    chan = CR_CHAN(insn->chanspec);
 
-       for (n = 0; n < insn->n; n++) {
-               junk=data[n];
-       }
+    for (n = 0; n < insn->n; n++) {
+        junk = data[n];
+    }
 
-       return n;
+    return n;
 }
 
 static int daqgert_ao_rinsn(struct comedi_device *dev,
-                         struct comedi_subdevice *s,
-                         struct comedi_insn *insn, unsigned int *data)
-{
-       unsigned int n;
-       unsigned int chan;
+        struct comedi_subdevice *s,
+        struct comedi_insn *insn, unsigned int *data) {
+    unsigned int n;
+    unsigned int chan;
 
-       chan = CR_CHAN(insn->chanspec);
+    chan = CR_CHAN(insn->chanspec);
 
-       for (n = 0; n < insn->n; n++) {
-               data[n]=128;
-       }
+    for (n = 0; n < insn->n; n++) {
+        data[n] = 128;
+    }
 
-       return n;
+    return n;
 }
 
 /*
@@ -608,7 +606,8 @@ static void bcm2708_init_pinmode(void) {
 #undef SET_GPIO_ALT
 }
 
-static int bcm2708_check_pinmode(void) {
+static int bcm2708_check_pinmode(void) { // lets just say it works for now */  
+    int gert = TRUE; /* detection default */
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
 #define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
 
@@ -622,14 +621,15 @@ static int bcm2708_check_pinmode(void) {
 
 #undef INP_GPIO
 #undef SET_GPIO_ALT
-    return TRUE; // lets just say it works for now */
+    if (gert) return TRUE;
+    return FALSE;
 }
 
 static int daqgert_ai_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
     /* SPI data transfers */
     bcm2708_init_pinmode(); /* for access to the ADC/DAC later */
-    return 16;  /* for for compat with ni_daq_700 used for driver testing */
+    return 16; /* for for compat with ni_daq_700 used for driver testing */
 }
 
 static int daqgert_ao_config(struct comedi_device *dev,
@@ -641,7 +641,8 @@ static int daqgert_ao_config(struct comedi_device *dev,
 static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it) {
     const struct daqgert_board *thisboard = comedi_board(dev);
     struct comedi_subdevice *s;
-    int ret, num_subdev = 1,num_dio_chan=17,num_ai_chan=16,num_ao_chan=2;
+    int ret, num_subdev = 1, num_dio_chan = 17, num_ai_chan = 16, num_ao_chan = 2;
+    int gert;
 
     /* Use the kernel system_rev EXPORT_SYMBOL */
     RPisys_rev = system_rev; /* what board are we running on? */
@@ -657,7 +658,14 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     }
     dev->iobase = GPIO_BASE; /* filler */
 
-    if (bcm2708_check_pinmode()) num_subdev = 3;
+    gert = bcm2708_check_pinmode();     /* looking for a GERT Board */
+    if (gert) {
+        dev_info(dev->class_dev, "Gert Board Detected\n");
+        num_subdev = 3;
+    } else {
+        dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only.\n");
+    }
+
     wiringPiSetup(dev); /* setup the pin array */
     /* 4 pins for testing  */
     pinModeWPi(8, INPUT);
@@ -670,7 +678,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     pinModeWPi(15, INPUT);
     pinModeWPi(16, INPUT);
     if (RPisys_rev > 3) { /* This a Rev 2 board "I hope" */
-        num_dio_chan=21;
+        num_dio_chan = 21;
         pinModeWPi(17, INPUT);
         pinModeWPi(18, INPUT);
         pinModeWPi(19, INPUT);
@@ -705,7 +713,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     if (num_subdev > 1) { /* we have the SPI ADC DAC on board */
         /* daq-gert ai */
         s = &dev->subdevices[1];
-        num_ai_chan=daqgert_ai_config(dev, s); /* config SPI ports for ai use */
+        num_ai_chan = daqgert_ai_config(dev, s); /* config SPI ports for ai use */
         s->type = COMEDI_SUBD_AI;
         /* we support single-ended (ground)  */
         s->subdev_flags = SDF_READABLE | SDF_GROUND;
@@ -713,10 +721,10 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->maxdata = (1 << 10) - 1;
         s->range_table = &range_unipolar5;
         s->insn_read = daqgert_ai_rinsn;
-        
+
         /* daq-gert ao */
         s = &dev->subdevices[2];
-        num_ao_chan=daqgert_ao_config(dev, s); /* config SPI ports for ao use */
+        num_ao_chan = daqgert_ao_config(dev, s); /* config SPI ports for ao use */
         s->type = COMEDI_SUBD_AO;
         /* we support single-ended (ground)  */
         s->subdev_flags = SDF_WRITABLE | SDF_GROUND;
