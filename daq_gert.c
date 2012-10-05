@@ -23,8 +23,11 @@
 /*
 Driver: daq_gert in progress ...
  * 
+ * 
+ *  Added daq_gert.o to the
+ *  comedi/drivers/Makefile
+ *  obj-$(CONFIG_COMEDI_DAQ_GERT)           += daq_gert.o
  *  Added ARM to the comedi Kconfig file
- *  USING THE comedi_parport.c on the PI driver name to test until
  *  I add daq_gert to the comedi Kconfig file
  * 
 
@@ -238,6 +241,9 @@ int (*digitalRead) (int pin);
 
 static volatile uint32_t *gpio;
 
+/* Global for the RPi board rev */
+static unsigned int RPisys_rev;
+
 /*
  Doing it the Arduino way with lookup tables...
       Yes, it's probably more innefficient than all the bit-twidling, but it
@@ -408,19 +414,20 @@ int digitalReadGpio(int pin) {
  *	Revision is currently 1 or 2. -1 is returned on error.
  *********************************************************************************
  */
+extern unsigned int system_rev;
 
-int piBoardRev(void) {
-
+int piBoardRev(struct comedi_device *dev) {
     int r = -1;
     static int boardRev = -1;
-
-    /* No point checking twice... */
 
     if (boardRev != -1)
         return boardRev;
 
-    /* set that static boardrev */
-    r = 3;
+    /* Use the kernel system_rev EXPORT_SYMBOL */
+    RPisys_rev = system_rev;
+
+    dev_info(dev->class_dev, "RPi Board Rev %u\n", RPisys_rev);
+    r = RPisys_rev;
 
     if (r == -1) {
         return -1;
@@ -430,7 +437,7 @@ int piBoardRev(void) {
         boardRev = 1;
     else if ((r == 4) || (r == 5) || (r == 6))
         boardRev = 2;
-    else {  
+    else {
         return -1;
     }
 
@@ -446,14 +453,14 @@ int piBoardRev(void) {
  *********************************************************************************
  */
 
-int wiringPiSetup(void) {
+int wiringPiSetup(struct comedi_device *dev) {
     int boardRev;
 
     pinMode = pinModeWPi;
     digitalWrite = digitalWriteWPi;
     digitalRead = digitalReadWPi;
 
-    if ((boardRev = piBoardRev()) < 0)
+    if ((boardRev = piBoardRev(dev)) < 0)
         return -1;
 
     if (boardRev == 1)
@@ -472,10 +479,10 @@ int wiringPiSetup(void) {
  *********************************************************************************
  */
 
-int wiringPiSetupGpio(void) {
+int wiringPiSetupGpio(struct comedi_device *dev) {
     int x;
 
-    if ((x = wiringPiSetup()) < 0)
+    if ((x = wiringPiSetup(dev)) < 0)
         return x;
 
     pinMode = pinModeGpio;
@@ -591,7 +598,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     dev->iobase = GPIO_BASE; /* filler */
 
     bcm2708_init_pinmode(); /* for access to the ADC/DAC later */
-    wiringPiSetup();    /* setup the pin array */
+    wiringPiSetup(dev); /* setup the pin array */
     /* 4 pins for testing  */
     pinModeWPi(8, INPUT);
     pinModeWPi(9, INPUT);
