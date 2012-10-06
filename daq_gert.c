@@ -796,5 +796,5 @@ module_exit(daqgert_exit);
 MODULE_AUTHOR("Fred Brooks <nsaspook@nsaspook.com>");
 MODULE_DESCRIPTION(
         "Comedi driver for RASPI GERTBOARD DIO/AI/AO");
-MODULE_VERSION("0.0.01");
+MODULE_VERSION("0.0.02");
 MODULE_LICENSE("GPL");
