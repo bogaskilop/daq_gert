@@ -503,6 +503,7 @@ struct daqgert_board {
     const char *name;
 };
 
+
 static int daqgert_dio_insn_bits(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
