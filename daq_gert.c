@@ -245,6 +245,16 @@ static volatile uint32_t *gpio;
 extern unsigned int system_rev; // from the kernel symbol table export */
 static unsigned int RPisys_rev;
 
+static const struct comedi_lrange daqgert_ai_range = {1,
+    {
+        RANGE(0, 3.3),
+    }};
+
+static const struct comedi_lrange daqgert_ao_range = {1,
+    {
+        RANGE(0, 2.047),
+    }};
+
 /*
  Doing it the Arduino way with lookup tables...
       Yes, it's probably more innefficient than all the bit-twidling, but it
@@ -658,7 +668,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     }
     dev->iobase = GPIO_BASE; /* filler */
 
-    gert = bcm2708_check_pinmode();     /* looking for a GERT Board */
+    gert = bcm2708_check_pinmode(); /* looking for a GERT Board */
     if (gert) {
         dev_info(dev->class_dev, "Gert Board Detected\n");
         num_subdev = 3;
@@ -719,7 +729,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->subdev_flags = SDF_READABLE | SDF_GROUND;
         s->n_chan = num_ai_chan;
         s->maxdata = (1 << 10) - 1;
-        s->range_table = &range_unipolar5;
+        s->range_table = &daqgert_ai_range;
         s->insn_read = daqgert_ai_rinsn;
 
         /* daq-gert ao */
@@ -730,7 +740,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->subdev_flags = SDF_WRITABLE | SDF_GROUND;
         s->n_chan = num_ao_chan;
         s->maxdata = (1 << 8) - 1;
-        s->range_table = &range_unipolar5;
+        s->range_table = &daqgert_ao_range;
         s->insn_write = daqgert_ao_winsn;
         s->insn_read = daqgert_ao_rinsn;
     }
