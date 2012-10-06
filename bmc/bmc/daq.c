@@ -23,7 +23,7 @@ comedi_t *it;
 comedi_range *ad_range;
 int8_t ADC_OPEN = FALSE, DIO_OPEN = FALSE, ADC_ERROR = FALSE, DEV_OPEN = FALSE, DIO_ERROR = FALSE;
 
-int init_daq(double min_range, double max_range) {
+int init_daq(double min_range, double max_range, int range_update) {
     int i = 0;
 
     if (!DEV_OPEN) {
@@ -57,8 +57,10 @@ int init_daq(double min_range, double max_range) {
     ranges_ai = comedi_get_n_ranges(it, subdev_ai, i);
     printf("Ranges %i ", ranges_ai);
     ad_range = comedi_get_range(it, subdev_ai, i, ranges_ai - 1);
-    ad_range->min = min_range;
-    ad_range->max = max_range;
+    if (range_update) {
+        ad_range->min = min_range;
+        ad_range->max = max_range;
+    }
     printf(": ad_range .min = %.1f, max = %.1f\n", ad_range->min,
             ad_range->max);
 

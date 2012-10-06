@@ -244,6 +244,8 @@ static volatile uint32_t *gpio;
 /* Global for the RPi board rev */
 extern unsigned int system_rev; // from the kernel symbol table export */
 static unsigned int RPisys_rev;
+static int gert_detected = TRUE; /* The SPI code has found the IO chips */
+/* default to TRUE while testing */
 
 static const struct comedi_lrange daqgert_ai_range = {1,
     {
@@ -503,7 +505,8 @@ struct daqgert_board {
     const char *name;
 };
 
-
+/* FIXME Slow brute forced IO bits */
+/* need to use state to optimize changes */
 static int daqgert_dio_insn_bits(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
@@ -513,8 +516,14 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
 
         if (data[0] & 0xff) {
             /* OUT testing with gpio pins  */
-            digitalWriteWPi(0, s->state & 0x01);
+            digitalWriteWPi(0, (s->state & 0x01) >> 0);
             digitalWriteWPi(1, (s->state & 0x02) >> 1);
+            digitalWriteWPi(1, (s->state & 0x04) >> 2);
+            digitalWriteWPi(1, (s->state & 0x08) >> 3);
+            digitalWriteWPi(1, (s->state & 0x10) >> 4);
+            digitalWriteWPi(1, (s->state & 0x20) >> 5);
+            digitalWriteWPi(1, (s->state & 0x40) >> 6);
+            digitalWriteWPi(1, (s->state & 0x80) >> 7);
         }
     }
 
@@ -522,7 +531,21 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
     /* IN testing with gpio pins  */
     data[1] |= digitalReadWPi(8) << 8;
     data[1] |= digitalReadWPi(9) << 9;
-
+    if (gert_detected) {
+        data[1] |= digitalReadWPi(10) << 10;
+        data[1] |= digitalReadWPi(11) << 11;
+        data[1] |= digitalReadWPi(12) << 12;
+        data[1] |= digitalReadWPi(13) << 13;
+        data[1] |= digitalReadWPi(14) << 14;
+    }
+    data[1] |= digitalReadWPi(15) << 15;
+    data[1] |= digitalReadWPi(16) << 16; /* 32 bit int */
+    if (RPisys_rev > 3) {
+        data[1] |= digitalReadWPi(17) << 17;
+        data[1] |= digitalReadWPi(18) << 18;
+        data[1] |= digitalReadWPi(19) << 19;
+        data[1] |= digitalReadWPi(20) << 20;
+    }
     return insn->n;
 }
 
@@ -617,8 +640,7 @@ static void bcm2708_init_pinmode(void) {
 #undef SET_GPIO_ALT
 }
 
-static int bcm2708_check_pinmode(void) { // lets just say it works for now */  
-    int gert = TRUE; /* detection default */
+static int bcm2708_check_pinmode(void) { // lets just say it works for now */
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
 #define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
 
@@ -629,10 +651,12 @@ static int bcm2708_check_pinmode(void) { // lets just say it works for now */
         INP_GPIO(pin); /* set mode to GPIO input first */
         SET_GPIO_ALT(pin, 0); /* set mode to ALT 0 */
     }
+    /* look for SPI offboard chip responses */
+    /* Just pass gert_detected for now */
 
 #undef INP_GPIO
 #undef SET_GPIO_ALT
-    if (gert) return TRUE;
+    if (gert_detected) return TRUE;
     return FALSE;
 }
 
@@ -653,7 +677,6 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     const struct daqgert_board *thisboard = comedi_board(dev);
     struct comedi_subdevice *s;
     int ret, num_subdev = 1, num_dio_chan = 17, num_ai_chan = 16, num_ao_chan = 2;
-    int gert;
 
     /* Use the kernel system_rev EXPORT_SYMBOL */
     RPisys_rev = system_rev; /* what board are we running on? */
@@ -669,8 +692,8 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     }
     dev->iobase = GPIO_BASE; /* filler */
 
-    gert = bcm2708_check_pinmode(); /* looking for a GERT Board */
-    if (gert) {
+    gert_detected = bcm2708_check_pinmode(); /* looking for a GERT Board */
+    if (gert_detected) {
         dev_info(dev->class_dev, "Gert Board Detected\n");
         num_subdev = 3;
     } else {

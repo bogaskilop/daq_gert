@@ -48,7 +48,7 @@ extern "C" {
     extern struct didata datain;
     extern struct dodata dataout;
 
-    int init_daq(double, double);
+    int init_daq(double, double,int);
     int init_dio(void);
     int adc_range(double, double);
     double get_adc_volts(int);
