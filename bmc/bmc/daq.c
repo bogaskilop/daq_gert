@@ -49,7 +49,7 @@ int init_daq(double min_range, double max_range) {
         ADC_OPEN = FALSE;
     }
 
-    printf("Subdev AI %i ", subdev_ai);
+    printf("Subdev AI  %i ", subdev_ai);
     channels_ai = comedi_get_n_channels(it, subdev_ai);
     printf("Analog  Channels %i ", channels_ai);
     maxdata_ai = comedi_get_maxdata(it, subdev_ai, i);
@@ -62,7 +62,7 @@ int init_daq(double min_range, double max_range) {
     printf(": ad_range .min = %.1f, max = %.1f\n", ad_range->min,
             ad_range->max);
 
-    printf("Subdev AO %i ", subdev_ao);
+    printf("Subdev AO  %i ", subdev_ao);
     channels_ao = comedi_get_n_channels(it, subdev_ao);
     printf("Analog  Channels %i ", channels_ao);
     maxdata_ao = comedi_get_maxdata(it, subdev_ao, i);
@@ -146,7 +146,7 @@ int init_dio(void) {
         DIO_OPEN = FALSE;
     }
 
-    printf("Subdev  %i ", subdev_dio);
+    printf("Subdev DIO %i ", subdev_dio);
     channels_dio = comedi_get_n_channels(it, subdev_dio);
     printf("Digital Channels %i ", channels_dio);
     maxdata_dio = comedi_get_maxdata(it, subdev_dio, i);
