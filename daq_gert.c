@@ -506,10 +506,12 @@ struct daqgert_board {
 };
 
 /* FIXME Slow brute forced IO bits */
+
 /* need to use state to optimize changes */
 static int daqgert_dio_insn_bits(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
+    int pinWPi, maxpins = 16;
     if (data[0]) {
         s->state &= ~data[0];
         s->state |= (data[0] & data[1]);
@@ -518,33 +520,21 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
             /* OUT testing with gpio pins  */
             digitalWriteWPi(0, (s->state & 0x01) >> 0);
             digitalWriteWPi(1, (s->state & 0x02) >> 1);
-            digitalWriteWPi(1, (s->state & 0x04) >> 2);
-            digitalWriteWPi(1, (s->state & 0x08) >> 3);
-            digitalWriteWPi(1, (s->state & 0x10) >> 4);
-            digitalWriteWPi(1, (s->state & 0x20) >> 5);
-            digitalWriteWPi(1, (s->state & 0x40) >> 6);
-            digitalWriteWPi(1, (s->state & 0x80) >> 7);
+            digitalWriteWPi(2, (s->state & 0x04) >> 2);
+            digitalWriteWPi(3, (s->state & 0x08) >> 3);
+            digitalWriteWPi(4, (s->state & 0x10) >> 4);
+            digitalWriteWPi(5, (s->state & 0x20) >> 5);
+            digitalWriteWPi(5, (s->state & 0x40) >> 6);
+            digitalWriteWPi(7, (s->state & 0x80) >> 7);
         }
     }
 
     data[1] = s->state & 0xff;
-    /* IN testing with gpio pins  */
-    data[1] |= digitalReadWPi(8) << 8;
-    data[1] |= digitalReadWPi(9) << 9;
-    if (gert_detected) {
-        data[1] |= digitalReadWPi(10) << 10;
-        data[1] |= digitalReadWPi(11) << 11;
-        data[1] |= digitalReadWPi(12) << 12;
-        data[1] |= digitalReadWPi(13) << 13;
-        data[1] |= digitalReadWPi(14) << 14;
-    }
-    data[1] |= digitalReadWPi(15) << 15;
-    data[1] |= digitalReadWPi(16) << 16; /* 32 bit int */
-    if (RPisys_rev > 3) {
-        data[1] |= digitalReadWPi(17) << 17;
-        data[1] |= digitalReadWPi(18) << 18;
-        data[1] |= digitalReadWPi(19) << 19;
-        data[1] |= digitalReadWPi(20) << 20;
+    /* IN testing with gpio pins  8..17 or 20 */
+    if (RPisys_rev > 3) maxpins = 20; /* read extra 4 pins */
+    for (pinWPi = 8; pinWPi <= maxpins; pinWPi++) {
+        if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) { /* skip SPI pins */
+        } else data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift into place */
     }
     return insn->n;
 }
