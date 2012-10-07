@@ -243,6 +243,9 @@ static volatile uint32_t *gpio;
 
 /* Global for the RPi board rev */
 extern unsigned int system_rev; // from the kernel symbol table export */
+extern unsigned int system_serial_low;
+extern unsigned int system_serial_high;
+
 static unsigned int RPisys_rev;
 static int gert_detected = TRUE; /* The SPI code has found the IO chips */
 /* default to TRUE while testing */
@@ -435,7 +438,9 @@ int piBoardRev(struct comedi_device *dev) {
     if (boardRev != -1)
         return boardRev;
 
-    dev_info(dev->class_dev, "RPi Board Rev %u\n", RPisys_rev);
+    dev_info(dev->class_dev, "RPi Board Rev %u, Serial %08x%08x\n",
+            RPisys_rev, system_serial_high, system_serial_low);
+
     r = RPisys_rev;
 
     if (r == -1) {
