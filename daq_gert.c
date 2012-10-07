@@ -507,33 +507,30 @@ struct daqgert_board {
 
 /* FIXME Slow brute forced IO bits */
 
-/* need to use state to optimize changes */
+/* need to use (fix) state to optimize changes */
 static int daqgert_dio_insn_bits(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
-    int pinWPi, maxpins = 16;
+    int pinWPi, maxpins = 16; /* Rev #1 board pins */
     if (data[0]) {
         s->state &= ~data[0];
         s->state |= (data[0] & data[1]);
 
-        if (data[0] & 0xff) {
+        if (data[0] & 0xff) { /* Any data to change from all bit 0's [0..7] */
             /* OUT testing with gpio pins  */
-            digitalWriteWPi(0, (s->state & 0x01) >> 0);
-            digitalWriteWPi(1, (s->state & 0x02) >> 1);
-            digitalWriteWPi(2, (s->state & 0x04) >> 2);
-            digitalWriteWPi(3, (s->state & 0x08) >> 3);
-            digitalWriteWPi(4, (s->state & 0x10) >> 4);
-            digitalWriteWPi(5, (s->state & 0x20) >> 5);
-            digitalWriteWPi(5, (s->state & 0x40) >> 6);
-            digitalWriteWPi(7, (s->state & 0x80) >> 7);
+            /* We need to shift a single bit from state to set or clear the GPIO */
+            for (pinWPi = 0; pinWPi <= 7; pinWPi++) {
+                digitalWriteWPi(pinWPi, (s->state & (0x01 << pinWPi)) >> pinWPi);
+            }
         }
     }
 
     data[1] = s->state & 0xff;
     /* IN testing with gpio pins  8..17 or 20 */
-    if (RPisys_rev > 3) maxpins = 20; /* read extra 4 pins */
+    if (RPisys_rev > 3) maxpins = 20; /* Rev #2 board, read extra 4 pins */
     for (pinWPi = 8; pinWPi <= maxpins; pinWPi++) {
         if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) { /* skip SPI pins */
+            /* Do nothing */
         } else data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift into place */
     }
     return insn->n;
@@ -551,6 +548,7 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
             break;
         case INSN_CONFIG_DIO_QUERY:
             data[1] = (s->io_bits & chan) ? COMEDI_OUTPUT : COMEDI_INPUT;
+
             break;
         default:
             return -EINVAL;
@@ -562,6 +560,7 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
 static int daqgert_ai_rinsn(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
+
     int n, chan;
     int d = 512;
 
@@ -573,6 +572,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
 
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
+
         data[n] = d;
     }
     return n;
@@ -587,6 +587,7 @@ static int daqgert_ao_winsn(struct comedi_device *dev,
     chan = CR_CHAN(insn->chanspec);
 
     for (n = 0; n < insn->n; n++) {
+
         junk = data[n];
     }
 
@@ -602,6 +603,7 @@ static int daqgert_ao_rinsn(struct comedi_device *dev,
     chan = CR_CHAN(insn->chanspec);
 
     for (n = 0; n < insn->n; n++) {
+
         data[n] = 128;
     }
 
@@ -622,6 +624,7 @@ static void bcm2708_init_pinmode(void) {
 
     /* SPI is on GPIO 7..11 */
     for (pin = 7; pin <= 11; pin++) {
+
         INP_GPIO(pin); /* set mode to GPIO input first */
         SET_GPIO_ALT(pin, 0); /* set mode to ALT 0 */
     }
@@ -647,6 +650,7 @@ static int bcm2708_check_pinmode(void) { // lets just say it works for now */
 #undef INP_GPIO
 #undef SET_GPIO_ALT
     if (gert_detected) return TRUE;
+
     return FALSE;
 }
 
@@ -654,11 +658,13 @@ static int daqgert_ai_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
     /* SPI data transfers */
     bcm2708_init_pinmode(); /* for access to the ADC/DAC later */
+
     return 16; /* for for compat with ni_daq_700 used for driver testing */
 }
 
 static int daqgert_ao_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
+
     /* Stuff here? */
     return 2;
 }
@@ -727,6 +733,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     s->type = COMEDI_SUBD_DIO;
     s->subdev_flags = SDF_READABLE | SDF_WRITABLE;
     s->n_chan = num_dio_chan;
+    s->len_chanlist = num_dio_chan;
     s->range_table = &range_digital;
     s->maxdata = 1;
     s->insn_bits = daqgert_dio_insn_bits;
@@ -742,6 +749,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         /* we support single-ended (ground)  */
         s->subdev_flags = SDF_READABLE | SDF_GROUND;
         s->n_chan = num_ai_chan;
+        s->len_chanlist = num_ai_chan;
         s->maxdata = (1 << 10) - 1;
         s->range_table = &daqgert_ai_range;
         s->insn_read = daqgert_ai_rinsn;
@@ -753,6 +761,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         /* we support single-ended (ground)  */
         s->subdev_flags = SDF_WRITABLE | SDF_GROUND;
         s->n_chan = num_ao_chan;
+        s->len_chanlist = num_ao_chan;
         s->maxdata = (1 << 8) - 1;
         s->range_table = &daqgert_ao_range;
         s->insn_write = daqgert_ao_winsn;
@@ -769,7 +778,9 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
 }
 
 static void daqgert_detach(struct comedi_device *dev) {
+
     iounmap(gpio);
+    dev_info(dev->class_dev, "daq_gert detached\n");
 }
 
 static const struct daqgert_board daqgert_boards[] = {
@@ -810,5 +821,5 @@ module_exit(daqgert_exit);
 MODULE_AUTHOR("Fred Brooks <nsaspook@nsaspook.com>");
 MODULE_DESCRIPTION(
         "Comedi driver for RASPI GERTBOARD DIO/AI/AO");
-MODULE_VERSION("0.0.02");
+MODULE_VERSION("0.0.03");
 MODULE_LICENSE("GPL");
