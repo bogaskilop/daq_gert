@@ -110,7 +110,7 @@ WiringPI
 
 
 Devices: [] GERTBOARD (daq_gert)
-Status: inprogress (DIO 50%) (AI 1%) AO (0%) (My code cleanup 25%)
+Status: inprogress (DIO 50%) (AI 5%) AO (5%) (My code cleanup 25%)
 Updated: Wed, 3 Oct 2012 12:07:20 +0000
 
 The DAQ-GERT appears in Comedi as a  digital I/O subdevice (0) with
@@ -826,5 +826,5 @@ module_exit(daqgert_exit);
 MODULE_AUTHOR("Fred Brooks <nsaspook@nsaspook.com>");
 MODULE_DESCRIPTION(
         "Comedi driver for RASPI GERTBOARD DIO/AI/AO");
-MODULE_VERSION("0.0.03");
+MODULE_VERSION("0.0.04");
 MODULE_LICENSE("GPL");
