@@ -1,4 +1,4 @@
-A Comedi RPi howto:
+A Comedi RPi Debian based distro howto:
 
 Login as root ,use sudo or other means to get root access.
 
