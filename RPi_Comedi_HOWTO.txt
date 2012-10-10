@@ -1,6 +1,6 @@
 A Comedi RPi howto:
 
-Login as root or use sudo or other means to get root access.
+Login as root ,use sudo or other means to get root access.
 
 Install the Comedi software via the Debian apt or dselect command:
 libcomedi-dev
