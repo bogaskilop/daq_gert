@@ -510,8 +510,7 @@ struct daqgert_board {
     const char *name;
 };
 
-/* FIXME Slow brute forced IO bits */
-
+/* FIXME Slow brute forced IO bits, 5us reads from userland */
 /* need to use (fix) state to optimize changes */
 static int daqgert_dio_insn_bits(struct comedi_device *dev,
         struct comedi_subdevice *s,
@@ -773,7 +772,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->insn_read = daqgert_ao_rinsn;
     }
 
-    dev_info(dev->class_dev, "%s: %s, iobase 0x%lx, ioremap 0x%lx\n",
+    dev_info(dev->class_dev, "%s: %s iobase 0x%lx, ioremap 0x%lx\n",
             dev->driver->driver_name,
             dev->board_name,
             dev->iobase,
