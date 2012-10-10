@@ -11,6 +11,13 @@ Install the github daq_gert branch:
 git clone https://github.com/nsaspook/daq_gert.git
 cd daq_gert
 
+IMPORTANT!
+My modules were made on a modified comedi module source tree to be compatiable with 3.7 when released but it should
+work with the current kernel. There might already be a comedi.ko module from the Debian release installed in
+/lib/modules/3.2.27+/kernel/drivers/staging/comedi/drivers/
+ls -l /lib/modules/3.2.27+/kernel/drivers/staging/comedi/drivers/
+if there is try just copying the daq_gert.ko module first.
+
 Copy the daq_gert.ko and comedi.ko modules to the /lib/modules/3.2.27+/kernel/drivers/staging/comedi/drivers/
 directory. You may have to create the comedi/drivers/ directories.
 cp daq_gert.ko comedi.ko /lib/modules/3.2.27+/kernel/drivers/staging/comedi/drivers/
