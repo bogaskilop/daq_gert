@@ -28,13 +28,13 @@ Driver: daq_gert in progress ...
  *  comedi/drivers/Makefile
  *  obj-$(CONFIG_COMEDI_DAQ_GERT)           += daq_gert.o
  *  Added ARM to the comedi Kconfig file
- *  I add daq_gert to the comedi Kconfig file
+ *  Added daq_gert to the comedi Kconfig file
  * 
 
  config COMEDI
-        tristate "Data acquisition support (comedi)"
-        depends on m
-        depends on BROKEN || FRV || M32R || MN10300 || SUPERH || TILE || X86 || ARM
+   tristate "Data acquisition support (comedi)"
+   depends on m
+   depends on BROKEN || FRV || M32R || MN10300 || SUPERH || TILE || X86 || ARM
         ---help---
           Enable support a wide range of data acquisition devices
           for Linux.
@@ -43,10 +43,10 @@ config COMEDI_DAQ_GERT
         tristate "GERTBOARD support"
         depends on COMEDI_KCOMEDILIB
         ---help---
-          Enable support for a raspi gertboard
+       Enable support for a raspi gertboard
 
-          To compile this driver as a module, choose M here: the module will be
-          called daq_gert.
+       To compile this driver as a module, choose M here: the module will be
+       called daq_gert.
 
  * 
  * 
@@ -56,33 +56,11 @@ Author: Fred Brooks <nsaspook@nsaspook.com>
 Most of the actual GPIO,AI,AO code was copied from
  * 
 WiringPI 
- * wiringPi:
- *      Arduino compatable (ish) Wiring library for the Raspberry Pi
- *      Copyright (c) 2012 Gordon Henderson
- *      Additional code for pwmSetClock by Chris Hall <chris@kchall.plus.com>
- *
- *      Thanks to code samples from Gert Jan van Loo and the
- *      BCM2835 ARM Peripherals manual, however it's missing
- *      the clock section /grr/mutter/
+
  ***********************************************************************
  * This file is part of wiringPi:
  *      https://projects.drogon.net/raspberry-pi/wiringpi/
  *
- *    wiringPi is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU Lesser General Public License as
- *    published by the Free Software Foundation, either version 3 of the
- *    License, or (at your option) any later version.
- *
- *    wiringPi is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU Lesser General Public License for more details.
- *
- *    You should have received a copy of the GNU Lesser General Public
- *    License along with wiringPi.
- *    If not, see <http://www.gnu.org/licenses/>.
- ***********************************************************************
-
  * 
  Also 
  * 
@@ -93,21 +71,6 @@ WiringPI
  * This driver is inspired by:
  * spi-ath79.c, Copyright (C) 2009-2011 Gabor Juhos <juhosg@openwrt.org>
  * spi-atmel.c, Copyright (C) 2006 Atmel Corporation
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-
 
 Devices: [] GERTBOARD (daq_gert)
 Status: inprogress (DIO 50%) (AI 5%) AO (5%) (My code cleanup 25%)
@@ -236,6 +199,10 @@ int (*digitalRead) (int pin);
 #define BLOCK_SIZE              (4*1024)
  */
 
+/* driver hardware numbers */
+#define NUM_DIO_CHAN  17
+#define NUM_AI_CHAN 14
+#define NUM_AO_CHAN  2
 
 /* Locals to hold pointers to the hardware */
 
@@ -271,8 +238,9 @@ static const struct comedi_lrange daqgert_ao_range = {1,
  */
 static int *pinToGpio;
 
+/* From the Original Wiki - GPIO 0 through 7 */
 static int pinToGpioR1 [64] = {
-    17, 18, 21, 22, 23, 24, 25, 4, /* From the Original Wiki - GPIO 0 through 7 */
+    17, 18, 21, 22, 23, 24, 25, 4,
     0, 1, /* I2C  - SDA0, SCL0            wpi  8 -  9 */
     8, 7, /* SPI  - CE1, CE0              wpi 10 - 11 */
     10, 9, 11, /* SPI  - MOSI, MISO, SCLK      wpi 12 - 14 */
@@ -281,12 +249,13 @@ static int pinToGpioR1 [64] = {
     /* Padding: */
 
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* ... 31 */
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* ... 47 */
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* ... 63 */
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* . 47 */
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* ..63 */
 };
 
+/* From the Original Wiki - GPIO 0 through 7:   wpi  0 -  7 */
 static int pinToGpioR2 [64] = {
-    17, 18, 27, 22, 23, 24, 25, 4, /* From the Original Wiki - GPIO 0 through 7:   wpi  0 -  7 */
+    17, 18, 27, 22, 23, 24, 25, 4,
     2, 3, /* I2C  - SDA0, SCL0            wpi  8 -  9 */
     8, 7, /* SPI  - CE1, CE0              wpi 10 - 11 */
     10, 9, 11, /* SPI  - MOSI, MISO, SCLK      wpi 12 - 14 */
@@ -296,8 +265,8 @@ static int pinToGpioR2 [64] = {
     /* Padding: */
 
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* ... 31 */
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* ... 47 */
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* ... 63 */
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* . 47 */
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* . 63 */
 };
 
 /*
@@ -330,8 +299,10 @@ static uint8_t gpioToShift [] = {
       (Word) offset to the GPIO Set registers for each GPIO pin
  */
 static uint8_t gpioToGPSET [] = {
-    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7,
+    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8, 8, 8,
 };
 
 /*
@@ -339,8 +310,10 @@ static uint8_t gpioToGPSET [] = {
       (Word) offset to the GPIO Clear registers for each GPIO pin
  */
 static uint8_t gpioToGPCLR [] = {
-    10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-    11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
+    10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+    10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+    11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
+    11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
 };
 
 /*
@@ -348,14 +321,16 @@ static uint8_t gpioToGPCLR [] = {
       (Word) offset to the GPIO Input level registers for each GPIO pin
  */
 static uint8_t gpioToGPLEV [] = {
-    13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
-    14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14,
+    13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+    13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+    14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14,
+    14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14,
 };
 
 /*
  * pinMode:
  *      Sets the mode of a pin to be input, output
- *********************************************************************************
+ ************************************************************
  */
 
 void pinModeGpio(int pin, int mode) {
@@ -366,8 +341,8 @@ void pinModeGpio(int pin, int mode) {
     fSel = gpioToGPFSEL [pin];
     shift = gpioToShift [pin];
 
-    /**/ if (mode == INPUT)
-        *(gpio + fSel) = (*(gpio + fSel) & ~(7 << shift)); /* Sets bits to zero = input */
+    /**/ if (mode == INPUT) /* Sets bits to zero = input */
+        *(gpio + fSel) = (*(gpio + fSel) & ~(7 << shift));
     else if (mode == OUTPUT)
         *(gpio + fSel) = (*(gpio + fSel) & ~(7 << shift)) | (1 << shift);
 }
@@ -379,7 +354,7 @@ void pinModeWPi(int pin, int mode) {
 /*
  * digitalWrite:
  *      Set an output bit
- *********************************************************************************
+ *****************************************************************
  */
 
 void digitalWriteWPi(int pin, int value) {
@@ -403,7 +378,7 @@ void digitalWriteGpio(int pin, int value) {
 /*
  * digitalRead:
  *      Read the value of a given Pin, returning HIGH or LOW
- *********************************************************************************
+ *******************************************************************
  */
 
 int digitalReadWPi(int pin) {
@@ -428,7 +403,7 @@ int digitalReadGpio(int pin) {
  * piBoardRev:
  *	Return a number representing the hardware revision of the board.
  *	Revision is currently 1 or 2. -1 is returned on error.
- *********************************************************************************
+ *********************************************************************
  */
 
 int piBoardRev(struct comedi_device *dev) {
@@ -464,7 +439,7 @@ int piBoardRev(struct comedi_device *dev) {
  *
  * Default setup: Initialises the system into wiringPi Pin mode and uses the
  *	memory mapped hardware directly.
- *********************************************************************************
+ ************************************************************************
  */
 
 int wiringPiSetup(struct comedi_device *dev) {
@@ -490,7 +465,7 @@ int wiringPiSetup(struct comedi_device *dev) {
  *
  * GPIO setup: Initialises the system into GPIO Pin mode and uses the
  *	memory mapped hardware directly.
- *********************************************************************************
+ *************************************************************************
  */
 
 int wiringPiSetupGpio(struct comedi_device *dev) {
@@ -511,6 +486,7 @@ struct daqgert_board {
 };
 
 /* FIXME Slow brute forced IO bits, 5us reads from userland */
+
 /* need to use (fix) state to optimize changes */
 static int daqgert_dio_insn_bits(struct comedi_device *dev,
         struct comedi_subdevice *s,
@@ -524,7 +500,8 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
             /* OUT testing with gpio pins  */
             /* We need to shift a single bit from state to set or clear the GPIO */
             for (pinWPi = 0; pinWPi <= 7; pinWPi++) {
-                digitalWriteWPi(pinWPi, (s->state & (0x01 << pinWPi)) >> pinWPi);
+                digitalWriteWPi(pinWPi,
+                        (s->state & (0x01 << pinWPi)) >> pinWPi);
             }
         }
     }
@@ -533,9 +510,9 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
     /* IN testing with gpio pins  8..17 or 20 */
     if (RPisys_rev > 3) maxpins = 20; /* Rev #2 board, read extra 4 pins */
     for (pinWPi = 8; pinWPi <= maxpins; pinWPi++) {
-        if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) { /* skip SPI pins */
+        if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
             /* Do nothing */
-        } else data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift into place */
+        } else data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift */
     }
     return insn->n;
 }
@@ -637,7 +614,10 @@ static void bcm2708_init_pinmode(void) {
 #undef SET_GPIO_ALT
 }
 
-static int bcm2708_check_pinmode(void) { // lets just say it works for now */
+/* Still waiting for actual hardware */
+
+/* lets just say it works for now */
+static int bcm2708_check_pinmode(void) {
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
 #define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
 
@@ -654,7 +634,6 @@ static int bcm2708_check_pinmode(void) { // lets just say it works for now */
 #undef INP_GPIO
 #undef SET_GPIO_ALT
     if (gert_detected) return TRUE;
-
     return FALSE;
 }
 
@@ -676,7 +655,8 @@ static int daqgert_ao_config(struct comedi_device *dev,
 static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it) {
     const struct daqgert_board *thisboard = comedi_board(dev);
     struct comedi_subdevice *s;
-    int ret, num_subdev = 1, num_dio_chan = 17, num_ai_chan = 16, num_ao_chan = 2;
+    int ret, num_subdev = 1, num_ai_chan = NUM_AI_CHAN,
+            num_ao_chan = NUM_AO_CHAN, num_dio_chan = NUM_DIO_CHAN, i;
 
     /* Use the kernel system_rev EXPORT_SYMBOL */
     RPisys_rev = system_rev; /* what board are we running on? */
@@ -700,32 +680,20 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only.\n");
     }
 
-    wiringPiSetup(dev); /* setup the pin array */
-    /* 4 pins for testing  */
-    pinModeWPi(8, INPUT);
-    pinModeWPi(9, INPUT);
-    pinModeWPi(10, INPUT);
-    pinModeWPi(11, INPUT);
-    pinModeWPi(12, INPUT);
-    pinModeWPi(13, INPUT);
-    pinModeWPi(14, INPUT);
-    pinModeWPi(15, INPUT);
-    pinModeWPi(16, INPUT);
+    wiringPiSetup(dev); /* setup the pins in a static matter for now */
+    for (i = 0; i <= 7; i++) { /* [0..7] OUTPUTS */
+        pinModeWPi(i, OUTPUT);
+    }
+    for (i = 8; i <= 16; i++) { /* [8..16] INPUTS */
+        pinModeWPi(i, INPUT);
+    }
     if (RPisys_rev > 3) { /* This a Rev 2 board "I hope" */
         num_dio_chan = 21;
-        pinModeWPi(17, INPUT);
-        pinModeWPi(18, INPUT);
-        pinModeWPi(19, INPUT);
-        pinModeWPi(20, INPUT);
+        for (i = 17; i <= 20; i++) { /* [17..20] INPUTS */
+            pinModeWPi(i, INPUT);
+        }
     }
-    pinModeWPi(0, OUTPUT);
-    pinModeWPi(1, OUTPUT);
-    pinModeWPi(2, OUTPUT);
-    pinModeWPi(3, OUTPUT);
-    pinModeWPi(4, OUTPUT);
-    pinModeWPi(5, OUTPUT);
-    pinModeWPi(6, OUTPUT);
-    pinModeWPi(7, OUTPUT);
+
     dev->board_name = thisboard->name;
 
     ret = comedi_alloc_subdevices(dev, num_subdev);
