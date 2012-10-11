@@ -31,8 +31,10 @@
 #define SPI_SS		LATAbits.LATA5
 
 #define CMD_OK		0b11111110
-#define CMD_ALIVE	0b11111101
-#define CMD_FOO		0b11111011
+#define CMD_ALIVE	0b10101010
+#define CMD_FOO		0b11010101
+#define CMD_ADC_DATAL	0x01
+#define CMD_ADC_DATAH	0x02
 #define CMD_DUMMY	0b11111111
 
 /* LCD defines */
@@ -95,7 +97,7 @@ struct lcdb {
 
 const rom char *build_date = __DATE__, *build_time = __TIME__;
 volatile unsigned char data_in1, data_in2, adc_buffer_ptr = 0,
-	adc_channel = 0, dsi = 0;
+	adc_channel = 0, dsi = 0, SPI_DATA = FALSE, ADC_DATA = FALSE;
 volatile unsigned long adc_count = 0, adc_error_count = 0;
 volatile unsigned int adc_buffer[64] = {0};
 #pragma udata gpr13
@@ -133,6 +135,7 @@ void InterruptHandlerHigh(void)
 	adc_buffer[adc_buffer_ptr] = ADRESL + (ADRESH << 8);
 	LATJ = adc_count >> 16; // show the adc count.
 	LATEbits.LATE0 = !LATEbits.LATE0;
+	ADC_DATA = TRUE;
     }
 
     if (PIR1bits.SSP1IF) { // SPI port #1 SLAVE receiver
@@ -143,12 +146,18 @@ void InterruptHandlerHigh(void)
 	if (data_in1 == CMD_ALIVE) { // Found a Master command
 	    SSP1BUF = CMD_ALIVE; // Tell master  we are alive
 	    LATEbits.LATE6 = !LATEbits.LATE6;
-	    //	    if (ADCON0bits.GO = 0) LATJ = adc_buffer[adc_buffer_ptr]; // wait for conversion in progress
 	    ADCON0bits.GO = 1; // start a conversion
 	}
 	if (data_in1 == CMD_DUMMY) {
 	    SSP1BUF = CMD_DUMMY; // Tell master  we are here
 	}
+	if (data_in1 == CMD_ADC_DATAL) {
+	    SSP1BUF = ADRESL;
+	}
+	if (data_in1 == CMD_ADC_DATAH) {
+	    SSP1BUF = ADRESH;
+	}
+	SPI_DATA = TRUE;
     }
 
     if (PIR3bits.SSP2IF) { // SPI port #1 MASTER receiver
