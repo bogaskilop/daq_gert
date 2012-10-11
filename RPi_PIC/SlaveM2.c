@@ -350,6 +350,8 @@ void main(void) /* SPI Master/Slave loopback */
 	    } else {
 		REMOTE_LINK = FALSE;
 	    }
+	} else {
+	    REMOTE_LINK = FALSE;
 	}
 
 
@@ -367,7 +369,7 @@ void main(void) /* SPI Master/Slave loopback */
 	    for (j = 0; j < 1; j++) {
 	    }
 	}
-	if (((k++) % 5000) == 0) {
+	if ((((k++) % 5000) == 0) || !REMOTE_LINK) {
 	    if (REMOTE_LINK) {
 		sprintf(bootstr2,
 			"The SPI Link is UP         "
