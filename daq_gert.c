@@ -21,7 +21,7 @@
  */
 
 /*
-Driver: daq_gert in progress ...
+Driver: "experimental" daq_gert in progress ...
  * 
  * 
  *  Added daq_gert.o to the
