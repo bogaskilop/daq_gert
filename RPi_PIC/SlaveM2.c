@@ -257,7 +257,7 @@ void init_lcd(void)
 
 void main(void) /* SPI Master/Slave loopback */
 {
-    int i, j;
+    unsigned int i, j, k = 0;
     unsigned char junk;
     TRISB = 0xff; // external interrupts for later
     LATE = 0xff;
@@ -334,7 +334,16 @@ void main(void) /* SPI Master/Slave loopback */
 	    for (j = 0; j < 1; j++) {
 	    }
 	}
-
+	if (((k++) % 5000) == 0) {
+	    sprintf(bootstr2,
+		    "Err %lu, # %lu      ",
+		    adc_error_count, adc_count);
+	    LCD_VC_puts(VC0, DS0, YES);
+	    sprintf(bootstr2,
+		    "Data %u, Buffer %u      ",
+		    adc_buffer[adc_buffer_ptr], (int) adc_buffer_ptr);
+	    LCD_VC_puts(VC0, DS3, YES);
+	}
     };
 
 }
