@@ -40,9 +40,7 @@ volatile unsigned int adc_buffer[64] = {0};
 void InterruptHandlerHigh(void);
 
 //High priority interrupt vector
-
 #pragma code InterruptVectorHigh = 0x08
-
 void InterruptVectorHigh(void)
 {
     _asm
@@ -76,7 +74,7 @@ void InterruptHandlerHigh(void)
 	if (data_in1 == CMD_ALIVE) { // Found a Master command
 	    SSP1BUF = CMD_ALIVE; // Tell master  we are alive
 	    LATEbits.LATE6 = !LATEbits.LATE6;
-	    //	    if (ADCON0bits.GO = 0) LATJ = adc_buffer[adc_buffer_ptr]; // wait for conversion of in progress
+	    //	    if (ADCON0bits.GO = 0) LATJ = adc_buffer[adc_buffer_ptr]; // wait for conversion in progress
 	    ADCON0bits.GO = 1; // start a conversion
 	}
 	if (data_in1 == CMD_DUMMY) {
@@ -102,9 +100,6 @@ void InterruptHandlerHigh(void)
     }
 
 }
-
-
-
 #pragma code
 
 void main(void) /* SPI Master/Slave loopback */
@@ -172,6 +167,8 @@ void main(void) /* SPI Master/Slave loopback */
 	}
 
 	/* Delay, so we can adjust SPI pace */
+	/* the max conversion rate is about 50us per 10bit ADC read via the SPI */
+	/* with 40mhz FOSC and SPI_FOSC_16 */
 	for (i = 0; i < 1; i++) {
 	    for (j = 0; j < 1; j++) {
 	    }
@@ -179,4 +176,4 @@ void main(void) /* SPI Master/Slave loopback */
 
     };
 
-}//end void main(void)
+}
