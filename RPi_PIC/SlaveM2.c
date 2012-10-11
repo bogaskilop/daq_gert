@@ -32,7 +32,7 @@
 
 #define CMD_OK		0b11111110
 #define CMD_ALIVE	0b10101010
-#define CMD_FOO		0b11010101
+#define CMD_FOO		0x00
 #define CMD_ADC_DATAL	0x01
 #define CMD_ADC_DATAH	0x02
 #define CMD_DUMMY	0b11111111
@@ -133,7 +133,6 @@ void InterruptHandlerHigh(void)
 	PIR1bits.ADIF = LOW;
 	adc_count++; // just keep count
 	adc_buffer[adc_buffer_ptr] = ADRESL + (ADRESH << 8);
-	LATJ = adc_count >> 16; // show the adc count.
 	LATEbits.LATE0 = !LATEbits.LATE0;
 	ADC_DATA = TRUE;
     }
@@ -146,6 +145,7 @@ void InterruptHandlerHigh(void)
 	if (data_in1 == CMD_ALIVE) { // Found a Master command
 	    SSP1BUF = CMD_ALIVE; // Tell master  we are alive
 	    LATEbits.LATE6 = !LATEbits.LATE6;
+	    ADC_DATA=FALSE;
 	    ADCON0bits.GO = 1; // start a conversion
 	}
 	if (data_in1 == CMD_DUMMY) {
@@ -342,16 +342,18 @@ void main(void) /* SPI Master/Slave loopback */
 
 	clear_spi_data_flag();
 	SSP2BUF = CMD_ALIVE; // Master sends data
-	if (spi_data_recd()) {
+	if (spi_data_recd() && (data_in2==CMD_DUMMY)) {
 	    clear_spi_data_flag();
 	    SSP2BUF = CMD_DUMMY; // Master sends DUMMY data;
-	    if (spi_data_recd()) {
+	    if (spi_data_recd() && (data_in2==CMD_ALIVE)) {
 		REMOTE_LINK = TRUE;
 	    } else {
 		REMOTE_LINK = FALSE;
+		SSP2BUF = CMD_DUMMY; // Master sends DUMMY data;
 	    }
 	} else {
 	    REMOTE_LINK = FALSE;
+	    SSP2BUF = CMD_DUMMY; // Master sends DUMMY data;
 	}
 
 
@@ -380,6 +382,17 @@ void main(void) /* SPI Master/Slave loopback */
 			"The SPI Link is DOWN         "
 			);
 		LCD_VC_puts(VC0, DS0, YES);
+	    }
+	    	    if (ADC_DATA) {
+		sprintf(bootstr2,
+			"The ADC is Done         "
+			);
+		LCD_VC_puts(VC0, DS1, YES);
+	    } else {
+		sprintf(bootstr2,
+			"The ADC is Working             "
+			);
+		LCD_VC_puts(VC0, DS1, YES);
 	    }
 	    sprintf(bootstr2,
 		    "Err %lu, # %lu      ",
