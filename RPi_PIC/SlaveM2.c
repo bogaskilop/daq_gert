@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-//#include <GenericTypeDefs.h>
+#include <GenericTypeDefs.h>
 
 
 #define SPI_SS_PIN	 PORTAbits.RA5
@@ -96,13 +96,14 @@ struct lcdb {
 };
 
 const rom char *build_date = __DATE__, *build_time = __TIME__;
-volatile unsigned char data_in1, data_in2, adc_buffer_ptr = 0,
-	adc_channel = 0, dsi = 0, SPI_DATA = FALSE, ADC_DATA = FALSE;
-volatile unsigned long adc_count = 0, adc_error_count = 0;
-volatile unsigned int adc_buffer[64] = {0};
+volatile uint8_t data_in1, data_in2, adc_buffer_ptr = 0,
+	adc_channel = 0, dsi = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
+	REMOTE_LINK = FALSE;
+volatile uint32_t adc_count = 0, adc_error_count = 0;
+volatile uint16_t adc_buffer[64] = {0};
 #pragma udata gpr13
 far int8_t bootstr2[MESG_W + 1];
-unsigned char lcd18 = 200;
+uint8_t lcd18 = 200;
 #pragma udata gpr2
 struct lcdb ds[VS_SLOTS];
 #pragma udata gpr9
@@ -127,7 +128,6 @@ void InterruptVectorHigh(void)
 
 void InterruptHandlerHigh(void)
 {
-    unsigned char bit_bucket;
 
     if (PIR1bits.ADIF) { // ADC conversion complete flag
 	PIR1bits.ADIF = LOW;
@@ -182,7 +182,7 @@ void InterruptHandlerHigh(void)
 
 void wdtdelay(unsigned long delay)
 {
-    static unsigned long int dcount;
+    static uint32_t dcount;
     for (dcount = 0; dcount <= delay; dcount++) { // delay a bit
 	Nop();
 	ClrWdt(); // reset the WDT timer
@@ -191,7 +191,7 @@ void wdtdelay(unsigned long delay)
 
 void DelayFor18TCY(void)
 {
-    static unsigned char n;
+    static uint8_t n;
     _asm nop _endasm // asm code to disable compiler optimizations
     for (n = 0; n < lcd18; n++) Nop(); // works at 200 (slow white) or 24 (fast blue)
 }
@@ -214,7 +214,7 @@ void DelayXLCD(void) // works with 5
 
 void LCD_VC_puts(unsigned char console, unsigned char line, unsigned char COPY) // VCx,DSx, [TRUE..FALSE} copy data from bootstr2 string
 { // into the LCD display buffer
-    static unsigned char ib = 0;
+    static uint8_t ib = 0;
 
     if (COPY) {
 	ib = console + line; // set to string index to store data in LCD message array ds[x].b
@@ -264,10 +264,24 @@ void init_lcd(void)
     }
 }
 
+void clear_spi_data_flag(void)
+{
+    SPI_DATA = FALSE;
+}
+
+uint8_t spi_data_recd(void)
+{
+    uint32_t delay = 0;
+    while (!SPI_DATA) {
+	if (delay++ > 50000) return FALSE;
+    }
+    return TRUE;
+}
+
 void main(void) /* SPI Master/Slave loopback */
 {
-    unsigned int i, j, k = 0;
-    unsigned char junk;
+    int16_t i, j, k = 0;
+    uint8_t junk;
     TRISB = 0xff; // external interrupts for later
     LATE = 0xff;
     LATJ = 0xff;
@@ -313,9 +327,9 @@ void main(void) /* SPI Master/Slave loopback */
 
     init_lcd();
     strncpypgm2ram(bootstr2, build_time, LCD_W);
-    LCD_VC_puts(VC0, DS1, YES);
+    LCD_VC_puts(VC0, DS0, YES);
     strncpypgm2ram(bootstr2, build_date, LCD_W);
-    LCD_VC_puts(VC0, DS2, YES);
+    LCD_VC_puts(VC0, DS1, YES);
 
     for (i = 0; i < 1000; i++) {
 	for (j = 0; j < 100; j++) {
@@ -326,8 +340,18 @@ void main(void) /* SPI Master/Slave loopback */
     while (1) {
 	LATEbits.LATE7 = !LATEbits.LATE7;
 
+	clear_spi_data_flag();
 	SSP2BUF = CMD_ALIVE; // Master sends data
-	if (data_in2 != CMD_ALIVE) SSP2BUF = CMD_DUMMY; // Master sends DUMMY data;
+	if (spi_data_recd()) {
+	    clear_spi_data_flag();
+	    SSP2BUF = CMD_DUMMY; // Master sends DUMMY data;
+	    if (spi_data_recd()) {
+		REMOTE_LINK = TRUE;
+	    } else {
+		REMOTE_LINK = FALSE;
+	    }
+	}
+
 
 
 	if (SSP1CON1bits.WCOL || SSP2CON1bits.WCOL || SSP1CON1bits.SSPOV || SSP2CON1bits.SSPOV) { // check for overruns/collisions
@@ -344,10 +368,21 @@ void main(void) /* SPI Master/Slave loopback */
 	    }
 	}
 	if (((k++) % 5000) == 0) {
+	    if (REMOTE_LINK) {
+		sprintf(bootstr2,
+			"The SPI Link is UP         "
+			);
+		LCD_VC_puts(VC0, DS0, YES);
+	    } else {
+		sprintf(bootstr2,
+			"The SPI Link is DOWN         "
+			);
+		LCD_VC_puts(VC0, DS0, YES);
+	    }
 	    sprintf(bootstr2,
 		    "Err %lu, # %lu      ",
 		    adc_error_count, adc_count);
-	    LCD_VC_puts(VC0, DS0, YES);
+	    LCD_VC_puts(VC0, DS2, YES);
 	    sprintf(bootstr2,
 		    "Data %u, Buffer %u      ",
 		    adc_buffer[adc_buffer_ptr], (int) adc_buffer_ptr);
