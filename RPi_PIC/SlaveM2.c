@@ -15,9 +15,17 @@
 #pragma config STVREN = ON
 #pragma config LVP=OFF
 
+#include "xlcd.h"
 #include <p18cxxx.h>
 #include <spi.h>
 #include <adc.h>
+#include <delays.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+//#include <GenericTypeDefs.h>
+
 
 #define SPI_SS_PIN	 PORTAbits.RA5
 #define SPI_SS		LATAbits.LATA5
@@ -27,20 +35,81 @@
 #define CMD_FOO		0b11111011
 #define CMD_DUMMY	0b11111111
 
+/* LCD defines */
+#define LCD_L           4                       // lines
+#define LCD_W           20			// chars per line
+#define LCD_STR         22                 // char string for LCD messages
+#define LCDW_SIZE       21              // add term char
+#define MESG_W          250			// message string buffer
+#define	LL1		0x00                    // LCD line addresses
+#define	LL2		0x40
+#define LL3		0x14
+#define	LL4		0x54
+#define	VC_MAX		3
+#define VS_SLOTS	12                      // storage array size
+#define	VC0		0			// LCD Virtual Screens
+#define	VC1		4
+#define	VC2		8
+#define VS0		0			// Virtual screen select
+#define VS1		1
+#define VS2		2
+#define	DS0		0			// LCD line index
+#define	DS1		1
+#define	DS2		2
+#define	DS3		3
+#define	DS4		4
+#define	DS5		5
+/* DIO defines */
+#define LOW		(unsigned char)0        // digital output state levels, sink
+#define	HIGH            (unsigned char)1        // digital output state levels, source
+#define	ON		LOW       		//
+#define OFF		HIGH			//
+#define	S_ON            LOW       		// low select/on for chip/led
+#define S_OFF           HIGH			// high deselect/off chip/led
+#define	R_ON            HIGH       		// control relay states, relay is on when output gate is high, uln2803,omron relays need the CPU at 5.5vdc to drive
+#define R_OFF           LOW			// control relay states
+#define R_ALL_OFF       0x00
+#define R_ALL_ON	0xff
+#define NO		LOW
+#define YES		HIGH
 
-#define	HIGH	1
-#define	LOW	0
+#ifdef INTTYPES
+#include <stdint.h>
+#else
+#define INTTYPES
+/*unsigned types*/
+typedef unsigned char uint8_t;
+typedef unsigned int uint16_t;
+typedef unsigned long uint32_t;
+typedef unsigned long long uint64_t;
+/*signed types*/
+typedef signed char int8_t;
+typedef signed int int16_t;
+typedef signed long int32_t;
+typedef signed long long int64_t;
+#endif
 
+struct lcdb {
+    int8_t b[LCDW_SIZE];
+};
+
+const rom char *build_date = __DATE__, *build_time = __TIME__;
 volatile unsigned char data_in1, data_in2, adc_buffer_ptr = 0,
-	adc_channel = 0;
+	adc_channel = 0, dsi = 0;
 volatile unsigned long adc_count = 0, adc_error_count = 0;
 volatile unsigned int adc_buffer[64] = {0};
-
+#pragma udata gpr13
+far int8_t bootstr2[MESG_W + 1];
+unsigned char lcd18 = 200;
+#pragma udata gpr2
+struct lcdb ds[VS_SLOTS];
+#pragma udata gpr9
 
 void InterruptHandlerHigh(void);
 
 //High priority interrupt vector
 #pragma code InterruptVectorHigh = 0x08
+
 void InterruptVectorHigh(void)
 {
     _asm
@@ -102,6 +171,90 @@ void InterruptHandlerHigh(void)
 }
 #pragma code
 
+void wdtdelay(unsigned long delay)
+{
+    static unsigned long int dcount;
+    for (dcount = 0; dcount <= delay; dcount++) { // delay a bit
+	Nop();
+	ClrWdt(); // reset the WDT timer
+    };
+}
+
+void DelayFor18TCY(void)
+{
+    static unsigned char n;
+    _asm nop _endasm // asm code to disable compiler optimizations
+    for (n = 0; n < lcd18; n++) Nop(); // works at 200 (slow white) or 24 (fast blue)
+}
+
+//------------------------------------------
+
+void DelayPORXLCD(void) // works with 15
+{
+    Delay10KTCYx(15); // Delay of 15ms
+    return;
+}
+
+//------------------------------------------
+
+void DelayXLCD(void) // works with 5
+{
+    Delay10KTCYx(5); // Delay of 5ms
+    return;
+}
+
+void LCD_VC_puts(unsigned char console, unsigned char line, unsigned char COPY) // VCx,DSx, [TRUE..FALSE} copy data from bootstr2 string
+{ // into the LCD display buffer
+    static unsigned char ib = 0;
+
+    if (COPY) {
+	ib = console + line; // set to string index to store data in LCD message array ds[x].b
+	strncpypgm2ram(ds[ib].b, "                        ", LCD_W); // write 20 space chars
+	strncpy(ds[ib].b, bootstr2, LCD_W); // move data from static buffer in lcd message array
+	ds[ib].b[LCD_W] = 0; // make sure we have a string terminator
+    }
+    switch (line) {
+    case DS0:
+	SetDDRamAddr(LL1); // move to  line
+	break;
+    case DS1:
+	SetDDRamAddr(LL2); // move to  line
+	break;
+    case DS2:
+	SetDDRamAddr(LL3); // move to  line
+	break;
+    case DS3:
+	SetDDRamAddr(LL4); // move to  line
+	break;
+    default:
+	SetDDRamAddr(LL1); // move to  line 1 of out of range
+	break;
+    }
+    ib = dsi + line; // set to string index to display on LCD, dsi is the current VC being displayed
+
+    while (BusyXLCD());
+    putsXLCD(ds[ib].b);
+    while (BusyXLCD());
+}
+
+void init_lcd(void)
+{
+    lcd18 = 200;
+    wdtdelay(10000); // delay for power related LCD setup glitch
+    if (BusyXLCD()) {
+	OpenXLCD(FOUR_BIT & LINES_5X7);
+	while (BusyXLCD());
+	wdtdelay(10000); // delay for power related LCD setup glitch
+	OpenXLCD(FOUR_BIT & LINES_5X7);
+	while (BusyXLCD());
+	WriteCmdXLCD(0xc); // blink, cursor off
+	while (BusyXLCD());
+	WriteCmdXLCD(0x1); // clear screen
+	wdtdelay(10000);
+	lcd18 = 24;
+    }
+}
+
 void main(void) /* SPI Master/Slave loopback */
 {
     int i, j;
@@ -112,8 +265,9 @@ void main(void) /* SPI Master/Slave loopback */
     TRISE = 0;
     TRISF = 0;
     TRISJ = 0;
-    TRISHbits.TRISH0 = 0;
-    LATHbits.LATH0 = 1;
+    TRISH = LOW; // mpuled and LCD
+    LATH = 0xff;
+
     /* ADC channels setup */
     ADCON1 = 0x03; // adc [0..11] enable
     TRISAbits.TRISA0 = HIGH; // an0
@@ -134,7 +288,7 @@ void main(void) /* SPI Master/Slave loopback */
 
     SSPBUF = 0x55;
     OpenSPI1(SLV_SSOFF, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
-    OpenSPI2(SPI_FOSC_16, MODE_01, SMPEND); // Must be SMPMID in slave mode, Port D 4,5,6
+    OpenSPI2(SPI_FOSC_64, MODE_01, SMPEND); // Must be SMPMID in slave mode, Port D 4,5,6
     SSP1BUF = CMD_DUMMY;
     SSP2BUF = CMD_DUMMY;
 
@@ -147,6 +301,13 @@ void main(void) /* SPI Master/Slave loopback */
 
     SSP2BUF = CMD_DUMMY;
     SSP2BUF = CMD_DUMMY;
+
+    init_lcd();
+    strncpypgm2ram(bootstr2, build_time, LCD_W);
+    LCD_VC_puts(VC0, DS1, YES);
+    strncpypgm2ram(bootstr2, build_date, LCD_W);
+    LCD_VC_puts(VC0, DS2, YES);
+
     for (i = 0; i < 1000; i++) {
 	for (j = 0; j < 100; j++) {
 	}
@@ -169,7 +330,7 @@ void main(void) /* SPI Master/Slave loopback */
 	/* Delay, so we can adjust SPI pace */
 	/* the max conversion rate is about 50us per 10bit ADC read via the SPI */
 	/* with 40mhz FOSC and SPI_FOSC_16 */
-	for (i = 0; i < 1; i++) {
+	for (i = 0; i < 5; i++) {
 	    for (j = 0; j < 1; j++) {
 	    }
 	}
