@@ -310,8 +310,8 @@ void main(void) /* SPI Master/Slave loopback */
     IPR1bits.ADIP = HIGH; // ADC use high pri
 
     SSPBUF = 0x55;
-    OpenSPI1(SLV_SSOFF, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
-    OpenSPI2(SPI_FOSC_64, MODE_01, SMPEND); // Must be SMPMID in slave mode, Port D 4,5,6
+    OpenSPI1(SLV_SSOFF, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
+    OpenSPI2(SPI_FOSC_64, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6
     SSP1BUF = CMD_DUMMY;
     SSP2BUF = CMD_DUMMY;
 

@@ -201,6 +201,8 @@ int (*digitalRead) (int pin);
 
 /* driver hardware numbers */
 #define NUM_DIO_CHAN  17
+/* for for compat with ni_daq_700 used for driver testing, 2 AI channels */
+/* on the real device */
 #define NUM_AI_CHAN 14
 #define NUM_AO_CHAN  2
 
@@ -209,13 +211,14 @@ int (*digitalRead) (int pin);
 static volatile uint32_t *gpio;
 
 /* Global for the RPi board rev */
-extern unsigned int system_rev; // from the kernel symbol table export */
+extern unsigned int system_rev; // from the kernel symbol table exports */
 extern unsigned int system_serial_low;
 extern unsigned int system_serial_high;
 
 static unsigned int RPisys_rev;
-static int gert_detected = TRUE; /* The SPI code has found the IO chips */
-/* default to TRUE while testing */
+/* The SPI code has found the IO chips or not  */
+static int gert_detected = FALSE; 
+/* default to TRUE in detection code while testing */
 
 static const struct comedi_lrange daqgert_ai_range = {1,
     {
@@ -224,7 +227,7 @@ static const struct comedi_lrange daqgert_ai_range = {1,
 
 static const struct comedi_lrange daqgert_ao_range = {1,
     {
-        RANGE(0, 2.047),
+        RANGE(0, 2.048),
     }};
 
 /*
@@ -511,7 +514,7 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
     if (RPisys_rev > 3) maxpins = 20; /* Rev #2 board, read extra 4 pins */
     for (pinWPi = 8; pinWPi <= maxpins; pinWPi++) {
         if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
-            /* Do nothing */
+            /* Do nothing on SPI AUX pins*/
         } else data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift */
     }
     return insn->n;
@@ -591,32 +594,6 @@ static int daqgert_ao_rinsn(struct comedi_device *dev,
     return n;
 }
 
-/*
- * This function sets the ALT mode on the SPI pins so that we can use them with
- * the SPI hardware.
- *
- * FIXME: This is a hack. Use pinmux / pinctrl.
- */
-static void bcm2708_init_pinmode(void) {
-#define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
-#define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
-
-    int pin;
-
-    /* SPI is on GPIO 7..11 */
-    for (pin = 7; pin <= 11; pin++) {
-
-        INP_GPIO(pin); /* set mode to GPIO input first */
-        SET_GPIO_ALT(pin, 0); /* set mode to ALT 0 */
-    }
-
-#undef INP_GPIO
-#undef SET_GPIO_ALT
-}
-
-/* Still waiting for actual hardware */
-
-/* lets just say it works for now */
 static int bcm2708_check_pinmode(void) {
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
 #define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
@@ -629,34 +606,42 @@ static int bcm2708_check_pinmode(void) {
         SET_GPIO_ALT(pin, 0); /* set mode to ALT 0 */
     }
     /* look for SPI offboard chip responses */
-    /* Just pass gert_detected for now */
+    /* Just set gert_detected for now */
 
-#undef INP_GPIO
-#undef SET_GPIO_ALT
+    /* Still waiting for actual hardware */
+    /* lets just say it works for now */
+    gert_detected = TRUE;
+    /*
+     Code for SPI Slave data received from a Master transmission detection 
+     */
+
     if (gert_detected) return TRUE;
+
+    for (pin = 7; pin <= 11; pin++) {
+        INP_GPIO(pin); /* set mode to GPIO input again */
+    }
     return FALSE;
 }
 
 static int daqgert_ai_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
     /* SPI data transfers */
-    bcm2708_init_pinmode(); /* for access to the ADC/DAC later */
 
-    return 16; /* for for compat with ni_daq_700 used for driver testing */
+    return NUM_AI_CHAN;
 }
 
 static int daqgert_ao_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
 
     /* Stuff here? */
-    return 2;
+    return NUM_AO_CHAN;
 }
 
 static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it) {
     const struct daqgert_board *thisboard = comedi_board(dev);
     struct comedi_subdevice *s;
-    int ret, num_subdev = 1, num_ai_chan = NUM_AI_CHAN,
-            num_ao_chan = NUM_AO_CHAN, num_dio_chan = NUM_DIO_CHAN, i;
+    int ret, num_subdev = 1, num_ai_chan,
+            num_ao_chan, num_dio_chan = NUM_DIO_CHAN, i;
 
     /* Use the kernel system_rev EXPORT_SYMBOL */
     RPisys_rev = system_rev; /* what board are we running on? */
@@ -672,15 +657,9 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     }
     dev->iobase = GPIO_BASE; /* filler */
 
-    gert_detected = bcm2708_check_pinmode(); /* looking for a GERT Board */
-    if (gert_detected) {
-        dev_info(dev->class_dev, "Gert Board Detected\n");
-        num_subdev = 3;
-    } else {
-        dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only.\n");
-    }
-
-    wiringPiSetup(dev); /* setup the pins in a static matter for now */
+    /* setup the pins in a static matter for now */
+    /* PIN mode for all */
+    wiringPiSetup(dev);
     for (i = 0; i <= 7; i++) { /* [0..7] OUTPUTS */
         pinModeWPi(i, OUTPUT);
     }
@@ -692,6 +671,15 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         for (i = 17; i <= 20; i++) { /* [17..20] INPUTS */
             pinModeWPi(i, INPUT);
         }
+    }
+
+    /* Change pins [GPIO 7..11] to ALT SPI mode if gertboard found */
+    bcm2708_check_pinmode(); /* looking for a GERT Board */
+    if (gert_detected) {
+        dev_info(dev->class_dev, "Gert Board Detected\n");
+        num_subdev = 3;
+    } else {
+        dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only.\n");
     }
 
     dev->board_name = thisboard->name;
