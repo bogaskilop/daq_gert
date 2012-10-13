@@ -384,7 +384,7 @@ void main(void) /* SPI Master/Slave loopback */
 	}
 
 	/* Delay, so we can adjust SPI pace */
-	/* the max conversion rate is about 50us per 10bit ADC read via the SPI */
+	/* the max conversion rate is about 140us per 10bit ADC read via the SPI */
 	/* with 40mhz FOSC and SPI_FOSC_16 */
 	for (i = 0; i < 5; i++) {
 	    for (j = 0; j < 1; j++) {
