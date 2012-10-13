@@ -17,6 +17,7 @@
 
 #include "xlcd.h"
 #include <p18cxxx.h>
+#include <p18f8722.h>
 #include <spi.h>
 #include <adc.h>
 #include <delays.h>
@@ -27,15 +28,21 @@
 #include <GenericTypeDefs.h>
 
 
-#define SPI_SS_PIN	 PORTAbits.RA5
+#define SPI_SS_PIN	PORTAbits.RA5
 #define SPI_SS		LATAbits.LATA5
 
-#define CMD_OK		0b11111110
-#define CMD_ALIVE	0b10101010
-#define CMD_FOO		0x00
-#define CMD_ADC_DATAL	0x01
-#define CMD_ADC_DATAH	0x02
-#define CMD_DUMMY	0b11111111
+/* bit 7 high for command
+ * bits 6..4 command code
+ * bits 4..0 port address
+ *
+ */
+
+
+#define CMD_ADC_GO	0b10000000
+#define CMD_ADC_DONE	0b11110000
+#define CMD_ADC_DATAL	0b10010000
+#define CMD_ADC_DATAH	0b10100000
+#define CMD_DUMMY	0b01111111
 
 /* LCD defines */
 #define LCD_L           4                       // lines
@@ -98,9 +105,9 @@ struct lcdb {
 const rom char *build_date = __DATE__, *build_time = __TIME__;
 volatile uint8_t data_in1, data_in2, adc_buffer_ptr = 0,
 	adc_channel = 0, dsi = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
-	REMOTE_LINK = FALSE;
+	REMOTE_LINK = FALSE, REMOTE_DATA_DONE = FALSE, LOW_BITS = FALSE;
 volatile uint32_t adc_count = 0, adc_error_count = 0;
-volatile uint16_t adc_buffer[64] = {0};
+volatile uint16_t adc_buffer[64] = {0}, adc_data_recv = 0;
 #pragma udata gpr13
 far int8_t bootstr2[MESG_W + 1];
 uint8_t lcd18 = 200;
@@ -134,6 +141,7 @@ void InterruptHandlerHigh(void)
 	adc_count++; // just keep count
 	adc_buffer[adc_buffer_ptr] = ADRESL + (ADRESH << 8);
 	LATEbits.LATE0 = !LATEbits.LATE0;
+	SSP1BUF = ADRESL; // stuff with lower 8 bits
 	ADC_DATA = TRUE;
     }
 
@@ -142,39 +150,45 @@ void InterruptHandlerHigh(void)
 	data_in1 = SSP1BUF;
 	LATEbits.LATE1 = !LATEbits.LATE1;
 
-	if (data_in1 == CMD_ALIVE) { // Found a Master command
-	    SSP1BUF = CMD_ALIVE; // Tell master  we are alive
-	    LATEbits.LATE6 = !LATEbits.LATE6;
-	    ADC_DATA=FALSE;
+	if (data_in1 == CMD_ADC_GO) { // Found a Master command
+	    LATEbits.LATE2 = !LATEbits.LATE2;
+	    ADC_DATA = FALSE;
 	    ADCON0bits.GO = 1; // start a conversion
 	}
 	if (data_in1 == CMD_DUMMY) {
+	    LATEbits.LATE3 = !LATEbits.LATE3;
 	    SSP1BUF = CMD_DUMMY; // Tell master  we are here
 	}
 	if (data_in1 == CMD_ADC_DATAL) {
-	    SSP1BUF = ADRESL;
-	}
-	if (data_in1 == CMD_ADC_DATAH) {
+	    LATEbits.LATE4 = !LATEbits.LATE4;
 	    SSP1BUF = ADRESH;
 	}
-	SPI_DATA = TRUE;
+	if (data_in1 == CMD_ADC_DATAH) {
+	    LATEbits.LATE5 = !LATEbits.LATE5;
+	    SSP1BUF = ADRESL;
+	}
     }
 
     if (PIR3bits.SSP2IF) { // SPI port #1 MASTER receiver
 	PIR3bits.SSP2IF = LOW;
 	data_in2 = SSP2BUF;
-	LATEbits.LATE2 = !LATEbits.LATE2;
 
-	if (data_in2 == CMD_DUMMY) { // Crack the whip
-	    LATEbits.LATE3 = !LATEbits.LATE3;
+	if (REMOTE_DATA_DONE) {
+	    if (data_in2 == CMD_DUMMY) { // Crack the whip
+		LATEbits.LATE3 = !LATEbits.LATE3;
+	    }
+	} else {
+	    if (LOW_BITS) {
+		adc_data_recv = data_in2;
+		LOW_BITS = FALSE;
+		LATEbits.LATE6 = !LATEbits.LATE6;
+	    } else {
+		adc_data_recv += (data_in2 << 8);
+		LATEbits.LATE7 = !LATEbits.LATE7;
+		REMOTE_DATA_DONE;
+	    }
 	}
-	if (data_in2 == CMD_ALIVE) {
-	    LATEbits.LATE4 = !LATEbits.LATE4;
-	}
-	if (data_in2 == CMD_OK) {
-	    LATEbits.LATE5 = !LATEbits.LATE5;
-
-	}
+	SPI_DATA = TRUE;
     }
 
 }
@@ -309,7 +323,6 @@ void main(void) /* SPI Master/Slave loopback */
     PIE1bits.ADIE = HIGH; // the ADC interrupt enable bit
     IPR1bits.ADIP = HIGH; // ADC use high pri
 
-    SSPBUF = 0x55;
     OpenSPI1(SLV_SSOFF, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
     OpenSPI2(SPI_FOSC_64, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6
     SSP1BUF = CMD_DUMMY;
@@ -322,7 +335,7 @@ void main(void) /* SPI Master/Slave loopback */
     INTCONbits.PEIE = 1;
     INTCONbits.GIE = 1;
 
-    SSP2BUF = CMD_DUMMY;
+    SSP1BUF = CMD_DUMMY;
     SSP2BUF = CMD_DUMMY;
 
     init_lcd();
@@ -338,19 +351,25 @@ void main(void) /* SPI Master/Slave loopback */
     SSP1CON1bits.WCOL = SSP2CON1bits.WCOL = SSP1CON1bits.SSPOV = SSP2CON1bits.SSPOV = 0;
 
     while (1) {
-	LATEbits.LATE7 = !LATEbits.LATE7;
 
 	clear_spi_data_flag();
-	SSP2BUF = CMD_ALIVE; // Master sends data
-	if (spi_data_recd() && (data_in2==CMD_DUMMY)) {
+	LOW_BITS = TRUE;
+	REMOTE_DATA_DONE = TRUE;
+	SSP2BUF = CMD_ADC_GO; // Master sends data
+	if (spi_data_recd() && (data_in2 == CMD_DUMMY)) {
+	    REMOTE_DATA_DONE = FALSE;
+	    REMOTE_LINK = TRUE;
+	    for (i = 0; i < 1; i++) {
+		for (j = 0; j < 10; j++) {
+		}
+	    }
+	    clear_spi_data_flag();
+	    SSP2BUF = CMD_ADC_DATAL; // Master sends cmd;
+	    spi_data_recd();
 	    clear_spi_data_flag();
 	    SSP2BUF = CMD_DUMMY; // Master sends DUMMY data;
-	    if (spi_data_recd() && (data_in2==CMD_ALIVE)) {
-		REMOTE_LINK = TRUE;
-	    } else {
-		REMOTE_LINK = FALSE;
-		SSP2BUF = CMD_DUMMY; // Master sends DUMMY data;
-	    }
+	    spi_data_recd();
+	    REMOTE_DATA_DONE = TRUE;
 	} else {
 	    REMOTE_LINK = FALSE;
 	    SSP2BUF = CMD_DUMMY; // Master sends DUMMY data;
@@ -383,7 +402,7 @@ void main(void) /* SPI Master/Slave loopback */
 			);
 		LCD_VC_puts(VC0, DS0, YES);
 	    }
-	    	    if (ADC_DATA) {
+	    if (ADC_DATA) {
 		sprintf(bootstr2,
 			"The ADC is Done         "
 			);
@@ -399,8 +418,8 @@ void main(void) /* SPI Master/Slave loopback */
 		    adc_error_count, adc_count);
 	    LCD_VC_puts(VC0, DS2, YES);
 	    sprintf(bootstr2,
-		    "Data %u, Buffer %u      ",
-		    adc_buffer[adc_buffer_ptr], (int) adc_buffer_ptr);
+		    "DR %u, DS %u      ",
+		    adc_data_recv, adc_buffer[adc_buffer_ptr]);
 	    LCD_VC_puts(VC0, DS3, YES);
 	}
     };
