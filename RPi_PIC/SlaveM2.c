@@ -139,9 +139,9 @@ void InterruptHandlerHigh(void)
     if (PIR1bits.ADIF) { // ADC conversion complete flag
 	PIR1bits.ADIF = LOW;
 	adc_count++; // just keep count
-	adc_buffer[adc_buffer_ptr] = ADRESL + (ADRESH << 8);
+	adc_buffer[adc_buffer_ptr] = ADRES;
 	LATEbits.LATE0 = !LATEbits.LATE0;
-	SSP1BUF = ADRESL; // stuff with lower 8 bits
+	SSP1BUF = (uint8_t) adc_buffer[adc_buffer_ptr]; // stuff with lower 8 bits
 	ADC_DATA = TRUE;
     }
 
@@ -166,7 +166,7 @@ void InterruptHandlerHigh(void)
 	if (data_in1 == CMD_ADC_DATAL) {
 	    LATEbits.LATE4 = !LATEbits.LATE4;
 	    if (!ADCON0bits.GO) {
-		SSP1BUF = ADRESH;
+		SSP1BUF = (uint8_t) (adc_buffer[adc_buffer_ptr] >> 8); // stuff with upper 8 bits
 	    } else {
 		SSP1BUF = 0;
 	    }
@@ -174,7 +174,7 @@ void InterruptHandlerHigh(void)
 	if (data_in1 == CMD_ADC_DATAH) {
 	    LATEbits.LATE5 = !LATEbits.LATE5;
 	    if (!ADCON0bits.GO) {
-		SSP1BUF = ADRESL;
+		SSP1BUF = (uint8_t) adc_buffer[adc_buffer_ptr]; // stuff with lower 8 bits
 	    } else {
 		SSP1BUF = 0;
 	    }
@@ -191,11 +191,11 @@ void InterruptHandlerHigh(void)
 	    }
 	} else {
 	    if (LOW_BITS) {
-		adc_data_recv = data_in2;
+		adc_data_recv = (uint8_t) data_in2;
 		LOW_BITS = FALSE;
 		LATEbits.LATE6 = !LATEbits.LATE6;
 	    } else {
-		adc_data_recv += (data_in2 << 8);
+		adc_data_recv += (uint16_t) ((uint16_t) data_in2 << 8);
 		LATEbits.LATE7 = !LATEbits.LATE7;
 		REMOTE_DATA_DONE;
 	    }
@@ -356,9 +356,6 @@ void main(void) /* SPI Master/Slave loopback */
     PIE3bits.SSP2IE = 1;
     INTCONbits.PEIE = 1;
     INTCONbits.GIE = 1;
-
-    SSP1BUF = CMD_DUMMY;
-    SSP2BUF = CMD_DUMMY;
 
     init_lcd();
     strncpypgm2ram(bootstr2, build_time, LCD_W);
