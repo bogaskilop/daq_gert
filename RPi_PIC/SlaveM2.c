@@ -39,6 +39,8 @@
 
 
 #define CMD_ADC_GO	0b10000000
+#define CMD_ADC_GO_0	0b10000000
+#define CMD_ADC_GO_1	0b10000001
 #define CMD_ADC_DONE	0b11110000
 #define CMD_ADC_DATAL	0b10010000
 #define CMD_ADC_DATAH	0b10100000
@@ -135,13 +137,13 @@ void InterruptVectorHigh(void)
 
 void InterruptHandlerHigh(void)
 {
-
+    static uint8_t  channel=0;
     if (PIR1bits.ADIF) { // ADC conversion complete flag
 	PIR1bits.ADIF = LOW;
 	adc_count++; // just keep count
-	adc_buffer[adc_buffer_ptr] = ADRES;
+	adc_buffer[channel] = ADRES;
 	LATEbits.LATE0 = !LATEbits.LATE0;
-	SSP1BUF = (uint8_t) adc_buffer[adc_buffer_ptr]; // stuff with lower 8 bits
+	SSP1BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
 	ADC_DATA = TRUE;
     }
 
@@ -150,9 +152,11 @@ void InterruptHandlerHigh(void)
 	data_in1 = SSP1BUF;
 	LATEbits.LATE1 = !LATEbits.LATE1;
 
-	if (data_in1 == CMD_ADC_GO) { // Found a Master command
+	if ((data_in1 & 0xf0) == CMD_ADC_GO) { // Found a Master command
+	    channel=data_in1& 0x0f;
 	    LATEbits.LATE2 = !LATEbits.LATE2;
 	    if (!ADCON0bits.GO) {
+		ADCON0 = ((channel << 2) & 0b00111100) | (ADCON0 & 0b11000011);
 		ADC_DATA = FALSE;
 		ADCON0bits.GO = 1; // start a conversion
 	    } else {
@@ -166,7 +170,7 @@ void InterruptHandlerHigh(void)
 	if (data_in1 == CMD_ADC_DATAL) {
 	    LATEbits.LATE4 = !LATEbits.LATE4;
 	    if (!ADCON0bits.GO) {
-		SSP1BUF = (uint8_t) (adc_buffer[adc_buffer_ptr] >> 8); // stuff with upper 8 bits
+		SSP1BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
 	    } else {
 		SSP1BUF = 0;
 	    }
@@ -174,7 +178,7 @@ void InterruptHandlerHigh(void)
 	if (data_in1 == CMD_ADC_DATAH) {
 	    LATEbits.LATE5 = !LATEbits.LATE5;
 	    if (!ADCON0bits.GO) {
-		SSP1BUF = (uint8_t) adc_buffer[adc_buffer_ptr]; // stuff with lower 8 bits
+		SSP1BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
 	    } else {
 		SSP1BUF = 0;
 	    }
@@ -370,11 +374,11 @@ void main(void) /* SPI Master/Slave loopback */
     SSP1CON1bits.WCOL = SSP2CON1bits.WCOL = SSP1CON1bits.SSPOV = SSP2CON1bits.SSPOV = 0;
 
     while (1) {
-
+	junk++;
 	clear_spi_data_flag();
 	LOW_BITS = TRUE;
 	REMOTE_DATA_DONE = TRUE;
-	SSP2BUF = CMD_ADC_GO; // Master sends data
+	SSP2BUF = (CMD_ADC_GO&0b11111110)|(junk&0b00000001); // Master sends data
 	if (spi_data_recd() && (data_in2 == CMD_DUMMY)) {
 	    REMOTE_DATA_DONE = FALSE;
 	    REMOTE_LINK = TRUE;
@@ -434,8 +438,8 @@ void main(void) /* SPI Master/Slave loopback */
 		    adc_error_count, adc_count);
 	    LCD_VC_puts(VC0, DS2, YES);
 	    sprintf(bootstr2,
-		    "DR %u, DS %u      ",
-		    adc_data_recv, adc_buffer[adc_buffer_ptr]);
+		    "D %u, 0 %u 1 %u     ",
+		    adc_data_recv, adc_buffer[0],adc_buffer[1]);
 	    LCD_VC_puts(VC0, DS3, YES);
 	}
     };
