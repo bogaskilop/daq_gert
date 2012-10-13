@@ -152,8 +152,12 @@ void InterruptHandlerHigh(void)
 
 	if (data_in1 == CMD_ADC_GO) { // Found a Master command
 	    LATEbits.LATE2 = !LATEbits.LATE2;
-	    ADC_DATA = FALSE;
-	    ADCON0bits.GO = 1; // start a conversion
+	    if (!ADCON0bits.GO) {
+		ADC_DATA = FALSE;
+		ADCON0bits.GO = 1; // start a conversion
+	    } else {
+		SSP1BUF = 0;
+	    }
 	}
 	if (data_in1 == CMD_DUMMY) {
 	    LATEbits.LATE3 = !LATEbits.LATE3;
@@ -161,11 +165,19 @@ void InterruptHandlerHigh(void)
 	}
 	if (data_in1 == CMD_ADC_DATAL) {
 	    LATEbits.LATE4 = !LATEbits.LATE4;
-	    SSP1BUF = ADRESH;
+	    if (!ADCON0bits.GO) {
+		SSP1BUF = ADRESH;
+	    } else {
+		SSP1BUF = 0;
+	    }
 	}
 	if (data_in1 == CMD_ADC_DATAH) {
 	    LATEbits.LATE5 = !LATEbits.LATE5;
-	    SSP1BUF = ADRESL;
+	    if (!ADCON0bits.GO) {
+		SSP1BUF = ADRESL;
+	    } else {
+		SSP1BUF = 0;
+	    }
 	}
     }
 
@@ -278,6 +290,16 @@ void init_lcd(void)
     }
 }
 
+void adc_conv_delay(void)
+{
+    int16_t i, j, k = 0;
+
+    for (i = 0; i < 1; i++) {
+	for (j = 0; j < 10; j++) {
+	}
+    }
+}
+
 void clear_spi_data_flag(void)
 {
     SPI_DATA = FALSE;
@@ -359,10 +381,7 @@ void main(void) /* SPI Master/Slave loopback */
 	if (spi_data_recd() && (data_in2 == CMD_DUMMY)) {
 	    REMOTE_DATA_DONE = FALSE;
 	    REMOTE_LINK = TRUE;
-	    for (i = 0; i < 1; i++) {
-		for (j = 0; j < 10; j++) {
-		}
-	    }
+	    adc_conv_delay();
 	    clear_spi_data_flag();
 	    SSP2BUF = CMD_ADC_DATAL; // Master sends cmd;
 	    spi_data_recd();
