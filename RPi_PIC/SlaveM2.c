@@ -6,7 +6,8 @@
  * Fully interrupt drived SPI slave ADC for RPi via the daq_gert linux module
  * Port E is the main led diag port
  * PORT H is the LCD port
- * SPI 1 has been config'd as the slave with SPI 2 as Master. The I/O and clock pins
+ * SPI 1 has been config'd as the slave with no select, with SPI 2 as Master.
+ * The I/O and clock pins
  * have been interconnected in the standard way for a PIC18F8722 chip
  *
  * Version	0.01 The testing hardware is mainly a pic18f8722 with a
@@ -138,9 +139,9 @@ struct lcdb {
 
 const rom int8_t *build_date = __DATE__, *build_time = __TIME__;
 volatile uint8_t data_in1, data_in2, adc_buffer_ptr = 0,
-	adc_channel = 0, dsi = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
+	adc_channel = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
 	REMOTE_LINK = FALSE, REMOTE_DATA_DONE = FALSE, LOW_BITS = FALSE;
-
+volatile uint8_t dsi = 0;   // LCD virtual console number
 volatile uint32_t adc_count = 0, adc_error_count = 0;
 volatile uint16_t adc_buffer[64] = {0}, adc_data_recv = 0;
 #pragma udata gpr13
@@ -330,7 +331,7 @@ void LCD_VC_puts(unsigned char console, unsigned char line, unsigned char COPY) 
 	SetDDRamAddr(LL1); // move to  line 1 of out of range
 	break;
     }
-    ib = dsi + line; // set to string index to display on LCD, dsi is the current VC being displayed
+    ib = dsi + line; // set to string index to display on LCD, dsi GLOBAL is the current VC being displayed
 
     while (BusyXLCD());
     putsXLCD(ds[ib].b);
