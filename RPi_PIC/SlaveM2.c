@@ -136,7 +136,7 @@ struct lcdb {
     int8_t b[LCDW_SIZE];
 };
 
-const rom char *build_date = __DATE__, *build_time = __TIME__;
+const rom int8_t *build_date = __DATE__, *build_time = __TIME__;
 volatile uint8_t data_in1, data_in2, adc_buffer_ptr = 0,
 	adc_channel = 0, dsi = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
 	REMOTE_LINK = FALSE, REMOTE_DATA_DONE = FALSE, LOW_BITS = FALSE;
