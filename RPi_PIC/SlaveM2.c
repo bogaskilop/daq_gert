@@ -5,8 +5,17 @@
  *
  * Fully interrupt drived SPI slave ADC for RPi via the daq_gert linux module
  * Port E is the main led diag port
+ * PORT H is the LCD port
  * SPI 1 has been config'd as the slave with SPI 2 as Master. The I/O and clock pins
  * have been interconnected in the standard way for a PIC18F8722 chip
+ *
+ * Version	0.01 The testing hardware is mainly a pic18f8722 with a
+ *		LCD display and PORTE bit leds.
+ *		The target hardware for field use will be the pic18f25k22
+ *		due to its 28 pin dip format.
+ *		define the CPU type below.
+ *
+ * nsaspook@nsaspook.com    Oct 2012
  */
 
 //#define P25K22
@@ -29,6 +38,9 @@
 #pragma config	PLLCFG=ON
 #pragma config	WDTEN = OFF
 #pragma config	CCP2MX = PORTC1, PBADEN = OFF, T3CMX = PORTC0
+#pragma config	BOREN = OFF
+#pragma config	STVREN = ON
+#pragma config	LVP=OFF
 #endif
 
 #include <spi.h>
