@@ -55,7 +55,7 @@
 /* bit 7 high for command
  * bit 7 low  for config data in CMD_DUMMY per uC type
  * bits 6 config bit code always 1
- * bit	5 0=ADC ref VSS 1=ADC rec FVR=2.048
+ * bit	5 0=ADC ref VDD 1=ADC rec FVR=2.048
  * bit  4 0=10bit adc, 1=12bit adc
  * bits 3..0 port address
  *
@@ -474,7 +474,7 @@ void main(void) /* SPI Master/Slave loopback */
 
     SSP1CON1bits.WCOL = SSP2CON1bits.WCOL = SSP1CON1bits.SSPOV = SSP2CON1bits.SSPOV = 0;
 
-    while (1) {
+    while (1) {	// just loop asking for ADC 0 and 1 and output results on LCD
 	junk++;
 	clear_spi_data_flag();
 	LOW_BITS = TRUE;
