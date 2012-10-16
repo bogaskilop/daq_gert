@@ -22,9 +22,8 @@
 //#define P25K22
 #define P8722
 
-#include "xlcd.h"
-//#include <p18cxxx.h>
 #ifdef P8722
+#include "xlcd.h"
 #include <p18f8722.h>
 #pragma	config OSC = HSPLL
 #pragma config WDT = OFF
@@ -62,7 +61,7 @@
  *
  */
 
-#define CMD_ADC_GO		0b10000000
+#define CMD_ADC_GO	0b10000000
 #define CMD_ADC_GO_0	0b10000000
 #define CMD_ADC_GO_1	0b10000001
 #define CMD_ADC_DONE	0b11110000
@@ -142,13 +141,13 @@ volatile uint8_t data_in1, data_in2, adc_buffer_ptr = 0,
 	adc_channel = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
 	REMOTE_LINK = FALSE, REMOTE_DATA_DONE = FALSE, LOW_BITS = FALSE;
 volatile uint8_t dsi = 0; // LCD virtual console number
-volatile uint32_t adc_count = 0, adc_error_count = 0;
+volatile uint32_t adc_count = 0, adc_error_count = 0, master_int_count = 0;
 volatile uint16_t adc_buffer[64] = {0}, adc_data_recv = 0;
 #pragma udata gpr13
 far int8_t bootstr2[MESG_W + 1];
 uint8_t lcd18 = 200;
 #pragma udata gpr2
-struct lcdb ds[VS_SLOTS];
+far struct lcdb ds[VS_SLOTS];
 #pragma udata gpr9
 
 void InterruptHandlerHigh(void);
@@ -175,9 +174,6 @@ void InterruptHandlerHigh(void)
 
     if (PIR1bits.ADIF) { // ADC conversion complete flag
 	PIR1bits.ADIF = LOW;
-#ifdef P25K22
-	LATCbits.LATC6 = !LATCbits.LATC6;
-#endif
 	adc_count++; // just keep count
 	adc_buffer[channel] = ADRES;
 	SSP1BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
@@ -208,6 +204,9 @@ void InterruptHandlerHigh(void)
 	}
 	if (data_in1 == CMD_DUMMY_CFG) {
 	    SSP1BUF = CMD_DUMMY; // Tell master  we are here
+#ifdef P25K22
+	    LATCbits.LATC6 = !LATCbits.LATC6;
+#endif
 	}
 	if (data_in1 == CMD_ADC_DATAL) {
 	    if (!ADCON0bits.GO) {
@@ -225,36 +224,31 @@ void InterruptHandlerHigh(void)
 	}
     }
 
+#ifdef P8722
     if (PIR3bits.SSP2IF) { // SPI port #2 MASTER receiver
 	PIR3bits.SSP2IF = LOW;
+	master_int_count++;
 	data_in2 = SSP2BUF;
-#ifdef P8722
 	LATEbits.LATE5 = !LATEbits.LATE5;
-#endif
-
 	if (REMOTE_DATA_DONE) {
 	    if ((data_in2 & 0b11000000) == CMD_DUMMY_CFG) { // Crack that whip
-#ifdef P8722
 		LATEbits.LATE3 = !LATEbits.LATE3;
-#endif
 	    }
 	} else {
 	    if (LOW_BITS) {
 		adc_data_recv = (uint8_t) data_in2;
 		LOW_BITS = FALSE;
-#ifdef P8722
 		LATEbits.LATE6 = !LATEbits.LATE6;
-#endif
 	    } else {
 		adc_data_recv += (uint16_t) ((uint16_t) data_in2 << 8);
-#ifdef P8722
 		LATEbits.LATE7 = !LATEbits.LATE7;
-#endif
+
 		REMOTE_DATA_DONE;
 	    }
 	}
 	SPI_DATA = TRUE;
     }
+#endif
 
 }
 #pragma code
@@ -351,7 +345,7 @@ void adc_conv_delay(void)
     int16_t i, j, k = 0;
 
     for (i = 0; i < 1; i++) {
-	for (j = 0; j < 20; j++) {
+	for (j = 0; j < 100; j++) {
 	}
     }
 }
@@ -448,14 +442,18 @@ void main(void) /* SPI Master/Slave loopback */
     IPR1bits.ADIP = HIGH; // ADC use high pri
 
     OpenSPI1(SLV_SSOFF, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
+#ifdef P8722
     OpenSPI2(SPI_FOSC_64, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6
+#endif
     SSP1BUF = CMD_DUMMY_CFG;
     SSP2BUF = CMD_DUMMY_CFG;
 
     PIR1bits.SSP1IF = 0;
     PIE1bits.SSP1IE = 1;
+#ifdef P8722
     PIR3bits.SSP2IF = 0;
     PIE3bits.SSP2IE = 1;
+#endif
     INTCONbits.PEIE = 1;
     INTCONbits.GIE = 1;
 
@@ -473,13 +471,14 @@ void main(void) /* SPI Master/Slave loopback */
 #endif
 
     SSP1CON1bits.WCOL = SSP2CON1bits.WCOL = SSP1CON1bits.SSPOV = SSP2CON1bits.SSPOV = 0;
-    clear_spi_data_flag();
-    SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
-    spi_data_recd();
+
     while (1) { // just loop asking for ADC 0 and 1 and output results on LCD
 #ifdef P8722
 	LATEbits.LATE0 = !LATEbits.LATE0;
 #endif
+	clear_spi_data_flag();
+	SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
+	spi_data_recd();
 	junk++;
 	clear_spi_data_flag();
 	LOW_BITS = TRUE;
@@ -536,12 +535,12 @@ void main(void) /* SPI Master/Slave loopback */
 	if ((((k++) % 5000) == 0) || !REMOTE_LINK) {
 	    if (REMOTE_LINK) {
 		sprintf(bootstr2,
-			"SPI U %i Chan       ",
-			num_ai_chan);
+			"SPI U %i %b          ",
+			num_ai_chan, stuff);
 		LCD_VC_puts(VC0, DS0, YES);
 	    } else {
 		sprintf(bootstr2,
-			"SPI D %i %8b      ",
+			"SPI D %i %b          ",
 			num_ai_chan, stuff);
 		LCD_VC_puts(VC0, DS0, YES);
 	    }
@@ -557,8 +556,8 @@ void main(void) /* SPI Master/Slave loopback */
 		LCD_VC_puts(VC0, DS1, YES);
 	    }
 	    sprintf(bootstr2,
-		    "Err %lu, # %lu      ",
-		    adc_error_count, adc_count);
+		    "Err %lu, # %lu  %lu    ",
+		    adc_error_count, adc_count, master_int_count);
 	    LCD_VC_puts(VC0, DS2, YES);
 	    sprintf(bootstr2,
 		    "D %u, 0 %u 1 %u     ",
