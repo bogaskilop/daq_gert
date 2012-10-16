@@ -62,7 +62,7 @@
  *
  */
 
-#define CMD_ADC_GO	0b10000000
+#define CMD_ADC_GO		0b10000000
 #define CMD_ADC_GO_0	0b10000000
 #define CMD_ADC_GO_1	0b10000001
 #define CMD_ADC_DONE	0b11110000
@@ -141,7 +141,7 @@ const rom int8_t *build_date = __DATE__, *build_time = __TIME__;
 volatile uint8_t data_in1, data_in2, adc_buffer_ptr = 0,
 	adc_channel = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
 	REMOTE_LINK = FALSE, REMOTE_DATA_DONE = FALSE, LOW_BITS = FALSE;
-volatile uint8_t dsi = 0;   // LCD virtual console number
+volatile uint8_t dsi = 0; // LCD virtual console number
 volatile uint32_t adc_count = 0, adc_error_count = 0;
 volatile uint16_t adc_buffer[64] = {0}, adc_data_recv = 0;
 #pragma udata gpr13
@@ -175,24 +175,21 @@ void InterruptHandlerHigh(void)
 
     if (PIR1bits.ADIF) { // ADC conversion complete flag
 	PIR1bits.ADIF = LOW;
+#ifdef P25K22
+	LATCbits.LATC6 = !LATCbits.LATC6;
+#endif
 	adc_count++; // just keep count
 	adc_buffer[channel] = ADRES;
-#ifdef P8722
-	LATEbits.LATE0 = !LATEbits.LATE0;
-#endif
 	SSP1BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
 	ADC_DATA = TRUE;
     }
 
     if (PIR1bits.SSP1IF) { // SPI port #1 SLAVE receiver
 	PIR1bits.SSP1IF = LOW;
-	data_in1 = SSP1BUF;
-#ifdef P8722
-	LATEbits.LATE1 = !LATEbits.LATE1;
-#endif
 #ifdef P25K22
 	LATCbits.LATC7 = !LATCbits.LATC7;
 #endif
+	data_in1 = SSP1BUF;
 	if ((data_in1 & 0xf0) == CMD_ADC_GO) { // Found a Master command
 	    channel = data_in1 & 0x0f;
 #ifdef P25K22
@@ -201,26 +198,18 @@ void InterruptHandlerHigh(void)
 #endif
 #ifdef P8722
 	    if (channel > 11) channel = 0; // invalid so set to 0
-	    LATEbits.LATE2 = !LATEbits.LATE2;
 #endif
 	    if (!ADCON0bits.GO) {
 		ADCON0 = ((channel << 2) & 0b00111100) | (ADCON0 & 0b11000011);
 		ADC_DATA = FALSE;
 		ADCON0bits.GO = 1; // start a conversion
 	    } else {
-		SSP1BUF = 0;
 	    }
 	}
 	if (data_in1 == CMD_DUMMY_CFG) {
-#ifdef P8722
-	    LATEbits.LATE3 = !LATEbits.LATE3;
-#endif
 	    SSP1BUF = CMD_DUMMY; // Tell master  we are here
 	}
 	if (data_in1 == CMD_ADC_DATAL) {
-#ifdef P8722
-	    LATEbits.LATE4 = !LATEbits.LATE4;
-#endif
 	    if (!ADCON0bits.GO) {
 		SSP1BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
 	    } else {
@@ -228,9 +217,6 @@ void InterruptHandlerHigh(void)
 	    }
 	}
 	if (data_in1 == CMD_ADC_DATAH) {
-#ifdef P8722
-	    LATEbits.LATE5 = !LATEbits.LATE5;
-#endif
 	    if (!ADCON0bits.GO) {
 		SSP1BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
 	    } else {
@@ -239,9 +225,12 @@ void InterruptHandlerHigh(void)
 	}
     }
 
-    if (PIR3bits.SSP2IF) { // SPI port #1 MASTER receiver
+    if (PIR3bits.SSP2IF) { // SPI port #2 MASTER receiver
 	PIR3bits.SSP2IF = LOW;
 	data_in2 = SSP2BUF;
+#ifdef P8722
+	LATEbits.LATE5 = !LATEbits.LATE5;
+#endif
 
 	if (REMOTE_DATA_DONE) {
 	    if ((data_in2 & 0b11000000) == CMD_DUMMY_CFG) { // Crack that whip
@@ -384,7 +373,7 @@ uint8_t spi_data_recd(void)
 void main(void) /* SPI Master/Slave loopback */
 {
     int16_t i, j, k = 0, num_ai_chan = 0;
-    uint8_t junk;
+    uint8_t junk, stuff;
 
 #ifdef P8722
     TRISB = 0xff; // external interrupts for later
@@ -395,17 +384,27 @@ void main(void) /* SPI Master/Slave loopback */
     LATE = 0xff;
     LATJ = 0xff;
     LATH = 0xff;
+
+    TRISDbits.TRISD6 = 0; // SSP2 pins clk out MASTER
+    TRISDbits.TRISD5 = 1; // SDI
+    TRISDbits.TRISD4 = 0; // SDO
+
+    TRISCbits.TRISC3 = 1; // SSP1 pins clk in SLAVE
+    TRISCbits.TRISC4 = 1; // SDI
+    TRISCbits.TRISC5 = 0; // SDO
+
     ADCON1 = 0x03; // adc [0..11] enable
 #endif
 #ifdef P25K22
+    TRISCbits.TRISC6 = 0; // Diag led
     TRISCbits.TRISC7 = 0; // Diag led
     TRISAbits.TRISA6 = 0; // clock out
 
-    TRISBbits.TRISB1 = 0; // SSP2 pins
+    TRISBbits.TRISB1 = 0; // SSP2 pins MASTER
     TRISBbits.TRISB2 = 1;
     TRISBbits.TRISB3 = 0;
 
-    TRISCbits.TRISC3 = 1; // SSP1 pins
+    TRISCbits.TRISC3 = 1; // SSP1 pins SLAVE  
     TRISCbits.TRISC4 = 1;
     TRISCbits.TRISC5 = 0;
 
@@ -474,29 +473,48 @@ void main(void) /* SPI Master/Slave loopback */
 #endif
 
     SSP1CON1bits.WCOL = SSP2CON1bits.WCOL = SSP1CON1bits.SSPOV = SSP2CON1bits.SSPOV = 0;
-
-    while (1) {	// just loop asking for ADC 0 and 1 and output results on LCD
+    clear_spi_data_flag();
+    SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
+    spi_data_recd();
+    while (1) { // just loop asking for ADC 0 and 1 and output results on LCD
+#ifdef P8722
+	LATEbits.LATE0 = !LATEbits.LATE0;
+#endif
 	junk++;
 	clear_spi_data_flag();
 	LOW_BITS = TRUE;
 	REMOTE_DATA_DONE = TRUE;
 	SSP2BUF = (CMD_ADC_GO & 0b11111110) | (junk & 0b00000001); // Master sends data
-	if (spi_data_recd() && ((data_in2 & 0xf0) == CMD_DUMMY_CFG)) {
-	    num_ai_chan = data_in2 & 0x0f;
-	    REMOTE_DATA_DONE = FALSE;
-	    REMOTE_LINK = TRUE;
-	    adc_conv_delay();
-	    clear_spi_data_flag();
-	    SSP2BUF = CMD_ADC_DATAL; // Master sends cmd;
-	    spi_data_recd();
-	    clear_spi_data_flag();
-	    SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
-	    spi_data_recd();
-	    REMOTE_DATA_DONE = TRUE;
+	if (spi_data_recd()) {
+	    stuff = data_in2;
+#ifdef P8722
+	    LATEbits.LATE2 = !LATEbits.LATE2;
+#endif
+	    if ((data_in2 & 0b11000000) == CMD_DUMMY_CFG) {
+#ifdef P8722
+		LATEbits.LATE4 = !LATEbits.LATE4;
+#endif
+		num_ai_chan = data_in2 & 0x0f;
+		REMOTE_DATA_DONE = FALSE;
+		REMOTE_LINK = TRUE;
+		adc_conv_delay();
+		clear_spi_data_flag();
+		SSP2BUF = CMD_ADC_DATAL; // Master sends cmd;
+		spi_data_recd();
+		clear_spi_data_flag();
+		SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
+		spi_data_recd();
+		REMOTE_DATA_DONE = TRUE;
+	    }
 	} else {
 	    REMOTE_LINK = FALSE;
+	    clear_spi_data_flag();
 	    SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
+	    spi_data_recd();
 	    num_ai_chan = 0;
+#ifdef P8722
+	    LATEbits.LATE1 = !LATEbits.LATE1;
+#endif
 	}
 
 	if (SSP1CON1bits.WCOL || SSP2CON1bits.WCOL || SSP1CON1bits.SSPOV || SSP2CON1bits.SSPOV) { // check for overruns/collisions
@@ -518,13 +536,13 @@ void main(void) /* SPI Master/Slave loopback */
 	if ((((k++) % 5000) == 0) || !REMOTE_LINK) {
 	    if (REMOTE_LINK) {
 		sprintf(bootstr2,
-			"SPI UP %i Chan       ",
+			"SPI U %i Chan       ",
 			num_ai_chan);
 		LCD_VC_puts(VC0, DS0, YES);
 	    } else {
 		sprintf(bootstr2,
-			"SPI DOWN %i Chan       ",
-			num_ai_chan);
+			"SPI D %i %8b      ",
+			num_ai_chan, stuff);
 		LCD_VC_puts(VC0, DS0, YES);
 	    }
 	    if (ADC_DATA) {
