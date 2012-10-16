@@ -21,6 +21,7 @@
 
 //#define P25K22
 #define P8722
+//#define P8722_SLAVE
 
 #ifdef P8722
 #include "xlcd.h"
@@ -142,7 +143,7 @@ volatile uint8_t data_in1, data_in2, adc_buffer_ptr = 0,
 	REMOTE_LINK = FALSE, REMOTE_DATA_DONE = FALSE, LOW_BITS = FALSE;
 volatile uint8_t dsi = 0; // LCD virtual console number
 volatile uint32_t adc_count = 0, adc_error_count = 0, master_int_count = 0;
-volatile uint16_t adc_buffer[64] = {0}, adc_data_recv = 0;
+volatile uint16_t adc_buffer[64] = {0}, adc_data_in = 0;
 #pragma udata gpr13
 far int8_t bootstr2[MESG_W + 1];
 uint8_t lcd18 = 200;
@@ -236,11 +237,11 @@ void InterruptHandlerHigh(void)
 	    }
 	} else {
 	    if (LOW_BITS) {
-		adc_data_recv = (uint8_t) data_in2;
+		adc_data_in = (uint8_t) data_in2;
 		LOW_BITS = FALSE;
 		LATEbits.LATE6 = !LATEbits.LATE6;
 	    } else {
-		adc_data_recv += (uint16_t) ((uint16_t) data_in2 << 8);
+		adc_data_in += (uint16_t) ((uint16_t) data_in2 << 8);
 		LATEbits.LATE7 = !LATEbits.LATE7;
 
 		REMOTE_DATA_DONE;
@@ -345,7 +346,7 @@ void adc_conv_delay(void)
     int16_t i, j, k = 0;
 
     for (i = 0; i < 1; i++) {
-	for (j = 0; j < 100; j++) {
+	for (j = 0; j < 20; j++) {
 	}
     }
 }
@@ -366,7 +367,7 @@ uint8_t spi_data_recd(void)
 
 void main(void) /* SPI Master/Slave loopback */
 {
-    int16_t i, j, k = 0, num_ai_chan = 0;
+    int16_t i, j, k = 0, num_ai_chan = 0, adc_data_recv[16]={0};
     uint8_t junk, stuff;
 
 #ifdef P8722
@@ -476,9 +477,6 @@ void main(void) /* SPI Master/Slave loopback */
 #ifdef P8722
 	LATEbits.LATE0 = !LATEbits.LATE0;
 #endif
-	clear_spi_data_flag();
-	SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
-	spi_data_recd();
 	junk++;
 	clear_spi_data_flag();
 	LOW_BITS = TRUE;
@@ -503,7 +501,17 @@ void main(void) /* SPI Master/Slave loopback */
 		clear_spi_data_flag();
 		SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
 		spi_data_recd();
+		adc_data_recv[(junk & 0b00000001)] = adc_data_in;
+#ifdef P8722_SLAVE
+		adc_data_recv[(junk & 0b00000001)] = 0;
+#endif
 		REMOTE_DATA_DONE = TRUE;
+	    } else {
+		REMOTE_LINK = FALSE;
+		clear_spi_data_flag();
+		SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
+		spi_data_recd();
+		num_ai_chan = 0;
 	    }
 	} else {
 	    REMOTE_LINK = FALSE;
@@ -537,32 +545,32 @@ void main(void) /* SPI Master/Slave loopback */
 		sprintf(bootstr2,
 			"SPI U %i %b          ",
 			num_ai_chan, stuff);
-		LCD_VC_puts(VC0, DS0, YES);
+		LCD_VC_puts(VC0, DS2, YES);
 	    } else {
 		sprintf(bootstr2,
 			"SPI D %i %b          ",
 			num_ai_chan, stuff);
-		LCD_VC_puts(VC0, DS0, YES);
+		LCD_VC_puts(VC0, DS2, YES);
 	    }
 	    if (ADC_DATA) {
 		sprintf(bootstr2,
 			"The ADC is Done         "
 			);
-		LCD_VC_puts(VC0, DS1, YES);
+		LCD_VC_puts(VC0, DS3, YES);
 	    } else {
 		sprintf(bootstr2,
 			"The ADC is Working             "
 			);
-		LCD_VC_puts(VC0, DS1, YES);
+		LCD_VC_puts(VC0, DS3, YES);
 	    }
 	    sprintf(bootstr2,
-		    "Err %lu, # %lu  %lu    ",
+		    "Err %lu, #%lu  I%lu    ",
 		    adc_error_count, adc_count, master_int_count);
-	    LCD_VC_puts(VC0, DS2, YES);
+	    LCD_VC_puts(VC0, DS0, YES);
 	    sprintf(bootstr2,
-		    "D %u, 0 %u 1 %u     ",
-		    adc_data_recv, adc_buffer[0], adc_buffer[1]);
-	    LCD_VC_puts(VC0, DS3, YES);
+		    "D %u,%u A %u,%u     ",
+		    adc_data_recv[0], adc_data_recv[1], adc_buffer[0], adc_buffer[1]);
+	    LCD_VC_puts(VC0, DS1, YES);
 	}
 #endif
     };
