@@ -27,7 +27,7 @@
 #include "xlcd.h"
 #include <p18f8722.h>
 #pragma	config OSC = HSPLL
-#pragma config WDT = OFF
+#pragma config WDT = ON, WDTPS = 1024
 #pragma config BOREN = OFF
 #pragma config STVREN = ON
 #pragma config LVP=OFF
@@ -45,6 +45,7 @@
 #endif
 
 #include <spi.h>
+#include <timers.h>
 #include <adc.h>
 #include <delays.h>
 #include <string.h>
@@ -61,6 +62,8 @@
  * bits 3..0 port address
  *
  */
+
+#define	TIMEROFFSET		26474           // timer0 16bit counter value for 1 second to overflow
 
 #define CMD_ADC_GO	0b10000000
 #define CMD_ADC_GO_0	0b10000000
@@ -142,7 +145,8 @@ volatile uint8_t data_in1, data_in2, adc_buffer_ptr = 0,
 	adc_channel = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
 	REMOTE_LINK = FALSE, REMOTE_DATA_DONE = FALSE, LOW_BITS = FALSE;
 volatile uint8_t dsi = 0; // LCD virtual console number
-volatile uint32_t adc_count = 0, adc_error_count = 0, master_int_count = 0;
+volatile uint32_t adc_count = 0, adc_error_count = 0, master_int_count = 0,
+	slave_int_count = 0, last_slave_int_count = 0;
 volatile uint16_t adc_buffer[64] = {0}, adc_data_in = 0;
 #pragma udata gpr13
 far int8_t bootstr2[MESG_W + 1];
@@ -171,7 +175,20 @@ void InterruptVectorHigh(void)
 
 void InterruptHandlerHigh(void)
 {
-    static uint8_t channel = 0;
+    static uint8_t channel = 0, dummy_read = 0;
+    static union Timers timer;
+
+    if (INTCONbits.TMR0IF) { // check timer0 irq 1 second timer int handler
+	INTCONbits.TMR0IF = LOW; //clear interrupt flag
+	//check for TMR0 overflow
+
+	timer.lt = TIMEROFFSET; // Copy timer value into union
+	TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
+	TMR0L = timer.bt[LOW]; // Write low byte to Timer0
+	if ((slave_int_count - last_slave_int_count) < 10) {
+	    ClrWdt(); // reset the WDT timer
+	}
+    }
 
     if (PIR1bits.ADIF) { // ADC conversion complete flag
 	PIR1bits.ADIF = LOW;
@@ -183,9 +200,7 @@ void InterruptHandlerHigh(void)
 
     if (PIR1bits.SSP1IF) { // SPI port #1 SLAVE receiver
 	PIR1bits.SSP1IF = LOW;
-#ifdef P25K22
-	LATCbits.LATC7 = !LATCbits.LATC7;
-#endif
+	slave_int_count++;
 	data_in1 = SSP1BUF;
 	if ((data_in1 & 0xf0) == CMD_ADC_GO) { // Found a Master command
 	    channel = data_in1 & 0x0f;
@@ -200,40 +215,59 @@ void InterruptHandlerHigh(void)
 		ADCON0 = ((channel << 2) & 0b00111100) | (ADCON0 & 0b11000011);
 		ADC_DATA = FALSE;
 		ADCON0bits.GO = 1; // start a conversion
+#ifdef P8722
+		LATEbits.LATE1 = !LATEbits.LATE1;
+#endif
 	    } else {
+		ADCON0bits.GO = 0; // stop a conversion
+		SSP1BUF = CMD_DUMMY; // Tell master  we are here
+		ADC_DATA = FALSE;
+#ifdef P8722
+		LATEbits.LATE2 = !LATEbits.LATE2;
+#endif
 	    }
 	}
 	if (data_in1 == CMD_DUMMY_CFG) {
 	    SSP1BUF = CMD_DUMMY; // Tell master  we are here
-#ifdef P25K22
-	    LATCbits.LATC6 = !LATCbits.LATC6;
+#ifdef P8722
+	    LATEbits.LATE3 = !LATEbits.LATE3;
 #endif
 	}
 	if (data_in1 == CMD_ADC_DATAL) {
 	    if (!ADCON0bits.GO) {
 		SSP1BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
+#ifdef P8722
+		LATEbits.LATE4 = !LATEbits.LATE4;
+#endif
+		last_slave_int_count = slave_int_count;
+		ClrWdt(); // reset the WDT timer
 	    } else {
-		SSP1BUF = 0;
+#ifdef P8722
+		LATEbits.LATE5 = !LATEbits.LATE5;
+#endif
+		SSP1BUF = CMD_DUMMY;
 	    }
 	}
 	if (data_in1 == CMD_ADC_DATAH) {
 	    if (!ADCON0bits.GO) {
 		SSP1BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
 	    } else {
-		SSP1BUF = 0;
+		SSP1BUF = CMD_DUMMY;
 	    }
 	}
     }
+
+
+
+
 
 #ifdef P8722
     if (PIR3bits.SSP2IF) { // SPI port #2 MASTER receiver
 	PIR3bits.SSP2IF = LOW;
 	master_int_count++;
 	data_in2 = SSP2BUF;
-	LATEbits.LATE5 = !LATEbits.LATE5;
 	if (REMOTE_DATA_DONE) {
 	    if ((data_in2 & 0b11000000) == CMD_DUMMY_CFG) { // Crack that whip
-		LATEbits.LATE3 = !LATEbits.LATE3;
 	    }
 	} else {
 	    if (LOW_BITS) {
@@ -367,7 +401,7 @@ uint8_t spi_data_recd(void)
 
 void main(void) /* SPI Master/Slave loopback */
 {
-    int16_t i, j, k = 0, num_ai_chan = 0, adc_data_recv[16]={0};
+    int16_t i, j, k = 0, num_ai_chan = 0, adc_data_recv[16] = {0};
     uint8_t junk, stuff;
 
 #ifdef P8722
@@ -435,6 +469,8 @@ void main(void) /* SPI Master/Slave loopback */
     TRISFbits.TRISF4 = HIGH; // an9
     TRISFbits.TRISF5 = HIGH; // an10
     TRISFbits.TRISF6 = HIGH; // an11
+    TRISFbits.TRISF7 = LOW;  // SS1
+    LATFbits.LATF7=0;	    // enable slave
 
     OpenADC(ADC_FOSC_RC & ADC_RIGHT_JUST & ADC_20_TAD, ADC_CH0 & ADC_REF_VDD_VSS & ADC_INT_ON, ADC_12ANA); // open ADC channel for current and voltage readings
 #endif
@@ -442,18 +478,24 @@ void main(void) /* SPI Master/Slave loopback */
     PIE1bits.ADIE = HIGH; // the ADC interrupt enable bit
     IPR1bits.ADIP = HIGH; // ADC use high pri
 
-    OpenSPI1(SLV_SSOFF, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
+    OpenSPI1(SLV_SSON, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
 #ifdef P8722
-    OpenSPI2(SPI_FOSC_64, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6
+    OpenSPI2(SPI_FOSC_64, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6
 #endif
+
+    OpenTimer0(TIMER_INT_ON & T0_16BIT & T0_SOURCE_INT & T0_PS_1_256);
+    WriteTimer0(TIMEROFFSET); //      start timer0 at 1 second ticks
+
     SSP1BUF = CMD_DUMMY_CFG;
     SSP2BUF = CMD_DUMMY_CFG;
 
     PIR1bits.SSP1IF = 0;
     PIE1bits.SSP1IE = 1;
 #ifdef P8722
+#ifndef P8722_SLAVE
     PIR3bits.SSP2IF = 0;
     PIE3bits.SSP2IE = 1;
+#endif
 #endif
     INTCONbits.PEIE = 1;
     INTCONbits.GIE = 1;
@@ -466,7 +508,8 @@ void main(void) /* SPI Master/Slave loopback */
     LCD_VC_puts(VC0, DS1, YES);
 
     for (i = 0; i < 1000; i++) {
-	for (j = 0; j < 100; j++) {
+	for (j = 0; j < 1000; j++) {
+	    ClrWdt(); // reset the WDT timer
 	}
     }
 #endif
@@ -478,22 +521,21 @@ void main(void) /* SPI Master/Slave loopback */
 	LATEbits.LATE0 = !LATEbits.LATE0;
 #endif
 	junk++;
-	clear_spi_data_flag();
+
+#ifndef P8722_SLAVE
 	LOW_BITS = TRUE;
 	REMOTE_DATA_DONE = TRUE;
+	clear_spi_data_flag();
 	SSP2BUF = (CMD_ADC_GO & 0b11111110) | (junk & 0b00000001); // Master sends data
 	if (spi_data_recd()) {
 	    stuff = data_in2;
-#ifdef P8722
-	    LATEbits.LATE2 = !LATEbits.LATE2;
-#endif
-	    if ((data_in2 & 0b11000000) == CMD_DUMMY_CFG) {
-#ifdef P8722
-		LATEbits.LATE4 = !LATEbits.LATE4;
-#endif
+	    if (((data_in2 & 0b11000000) == CMD_DUMMY_CFG)) {
 		num_ai_chan = data_in2 & 0x0f;
+
 		REMOTE_DATA_DONE = FALSE;
-		REMOTE_LINK = TRUE;
+		if (num_ai_chan > 0) {
+		    REMOTE_LINK = TRUE;
+		}
 		adc_conv_delay();
 		clear_spi_data_flag();
 		SSP2BUF = CMD_ADC_DATAL; // Master sends cmd;
@@ -519,9 +561,6 @@ void main(void) /* SPI Master/Slave loopback */
 	    SSP2BUF = CMD_DUMMY_CFG; // Master sends DUMMY data;
 	    spi_data_recd();
 	    num_ai_chan = 0;
-#ifdef P8722
-	    LATEbits.LATE1 = !LATEbits.LATE1;
-#endif
 	}
 
 	if (SSP1CON1bits.WCOL || SSP2CON1bits.WCOL || SSP1CON1bits.SSPOV || SSP2CON1bits.SSPOV) { // check for overruns/collisions
@@ -531,48 +570,51 @@ void main(void) /* SPI Master/Slave loopback */
 	    SSP1CON1bits.WCOL = SSP2CON1bits.WCOL = SSP1CON1bits.SSPOV = SSP2CON1bits.SSPOV = 0;
 	    adc_error_count = adc_count - adc_error_count;
 	}
-
-	/* Delay, so we can adjust SPI pace */
-	/* the max conversion rate is about 140us per 10bit ADC read via the SPI */
-	/* with 40mhz FOSC and SPI_FOSC_16 */
-	for (i = 0; i < 5; i++) {
-	    for (j = 0; j < 1; j++) {
-	    }
-	}
-#ifdef P8722
-	if ((((k++) % 5000) == 0) || !REMOTE_LINK) {
-	    if (REMOTE_LINK) {
-		sprintf(bootstr2,
-			"SPI U %i %b          ",
-			num_ai_chan, stuff);
-		LCD_VC_puts(VC0, DS2, YES);
-	    } else {
-		sprintf(bootstr2,
-			"SPI D %i %b          ",
-			num_ai_chan, stuff);
-		LCD_VC_puts(VC0, DS2, YES);
-	    }
-	    if (ADC_DATA) {
-		sprintf(bootstr2,
-			"The ADC is Done         "
-			);
-		LCD_VC_puts(VC0, DS3, YES);
-	    } else {
-		sprintf(bootstr2,
-			"The ADC is Working             "
-			);
-		LCD_VC_puts(VC0, DS3, YES);
-	    }
-	    sprintf(bootstr2,
-		    "Err %lu, #%lu  I%lu    ",
-		    adc_error_count, adc_count, master_int_count);
-	    LCD_VC_puts(VC0, DS0, YES);
-	    sprintf(bootstr2,
-		    "D %u,%u A %u,%u     ",
-		    adc_data_recv[0], adc_data_recv[1], adc_buffer[0], adc_buffer[1]);
-	    LCD_VC_puts(VC0, DS1, YES);
-	}
 #endif
+
+
+	for (i = 0; i < 1; i++) {
+	    for (j = 0; j < 1; j++) {
+#ifdef P8722
+		if ((((k++) % 5000) == 0) || !REMOTE_LINK) {
+		    if (REMOTE_LINK) {
+			sprintf(bootstr2,
+				"SPI U%i %b          ",
+				num_ai_chan, stuff);
+			LCD_VC_puts(VC0, DS0, YES);
+		    } else {
+			sprintf(bootstr2,
+				"SPI D%lu %lu         ",
+				last_slave_int_count, slave_int_count);
+			LCD_VC_puts(VC0, DS0, YES);
+		    }
+		    if (ADC_DATA) {
+			sprintf(bootstr2,
+				"The ADC is Done         "
+				);
+			LCD_VC_puts(VC0, DS3, YES);
+		    } else {
+			sprintf(bootstr2,
+				"The ADC is Working             "
+				);
+			LCD_VC_puts(VC0, DS3, YES);
+		    }
+		    sprintf(bootstr2,
+			    "Err %lu, #%lu  I%lu    ",
+			    adc_error_count, adc_count, master_int_count);
+		    LCD_VC_puts(VC0, DS2, YES);
+		    sprintf(bootstr2,
+			    "D %u,%u A %u,%u     ",
+			    adc_data_recv[0], adc_data_recv[1], adc_buffer[0], adc_buffer[1]);
+		    LCD_VC_puts(VC0, DS1, YES);
+		}
+#endif
+
+
+
+	    }
+	}
+
     };
 
 }
