@@ -6,15 +6,19 @@
  * Fully interrupt drived SPI slave ADC for RPi via the daq_gert linux module
  * Port E is the main led diag port
  * PORT H is the LCD port
- * SPI 1 has been config'd as the slave with no select, with SPI 2 as Master.
+ * SPI 2 has been config'd as the slave with chip select.
  * The I/O and clock pins
  * have been interconnected in the standard way for a PIC18F8722 chip
  *
- * Version	0.01 The testing hardware is mainly a pic18f8722 with a
+ * Version	0.02 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
  *		The target hardware for field use will be the pic18f25k22
- *		due to its 28 pin dip format.
+ *		due to its 28 pin dip format, BUT is nto currenetly being
+ *		tested.
  *		define the CPU type below.
+ *
+ *		The WatchDog and timer0 are used to check link status
+ *		and to reset the chip if hung or confused.
  *
  * nsaspook@nsaspook.com    Oct 2012
  */
@@ -174,7 +178,7 @@ void InterruptVectorHigh(void)
 
 void InterruptHandlerHigh(void)
 {
-    static uint8_t channel = 0, dummy_read = 0;
+    static uint8_t channel = 0, link;
     static union Timers timer;
 
     if (INTCONbits.TMR0IF) { // check timer0 irq 1 second timer int handler
@@ -184,9 +188,12 @@ void InterruptHandlerHigh(void)
 	timer.lt = TIMEROFFSET; // Copy timer value into union
 	TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
 	TMR0L = timer.bt[LOW]; // Write low byte to Timer0
+	/* if we are just idle don't reset the PIC */
 	if ((slave_int_count - last_slave_int_count) < 10) {
 	    ClrWdt(); // reset the WDT timer
 	}
+	link = FALSE;
+	REMOTE_LINK = FALSE;
 #ifdef P8722
 	LATEbits.LATE0 = !LATEbits.LATE0;
 #endif
@@ -203,6 +210,7 @@ void InterruptHandlerHigh(void)
 #endif
     }
 
+    /* we only get this when the master  wants data, the slave never generates one */
     if (PIR3bits.SSP2IF) { // SPI port #2 SLAVE receiver
 	PIR3bits.SSP2IF = LOW;
 	slave_int_count++;
@@ -246,6 +254,16 @@ void InterruptHandlerHigh(void)
 #endif
 		last_slave_int_count = slave_int_count;
 		ClrWdt(); // reset the WDT timer
+		REMOTE_LINK = TRUE;
+		link = TRUE;
+#ifdef P8722
+		LATEbits.LATE0 = HIGH;
+#endif
+		/* reset link data timer */
+		timer.lt = TIMEROFFSET; // Copy timer value into union
+		TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
+		TMR0L = timer.bt[LOW]; // Write low byte to Timer0
+		INTCONbits.TMR0IF = LOW; //clear possible interrupt flag
 	    } else {
 #ifdef P8722
 		LATEbits.LATE6 = !LATEbits.LATE6;
@@ -355,35 +373,8 @@ void init_lcd(void)
 }
 #endif
 
-void adc_conv_delay(void)
+void config_pic(void)
 {
-    int16_t i, j, k = 0;
-
-    for (i = 0; i < 1; i++) {
-	for (j = 0; j < 20; j++) {
-	}
-    }
-}
-
-void clear_spi_data_flag(void)
-{
-    SPI_DATA = FALSE;
-}
-
-uint8_t spi_data_recd(void)
-{
-    uint32_t delay = 0;
-    while (!SPI_DATA) {
-	if (delay++ > 50000) return FALSE;
-    }
-    return TRUE;
-}
-
-void main(void) /* SPI Master/Slave loopback */
-{
-    int16_t i, j, k = 0, num_ai_chan = 0;
-    uint8_t junk, stuff;
-
 #ifdef P8722
     TRISB = 0xff; // external interrupts for later
     TRISE = 0;
@@ -410,7 +401,7 @@ void main(void) /* SPI Master/Slave loopback */
     TRISBbits.TRISB2 = 1;
     TRISBbits.TRISB3 = 0;
 
-    TRISCbits.TRISC3 = 1; // SSP1 pins SLAVE  
+    TRISCbits.TRISC3 = 1; // SSP1 pins SLAVE
     TRISCbits.TRISC4 = 1;
     TRISCbits.TRISC5 = 0;
 
@@ -423,7 +414,7 @@ void main(void) /* SPI Master/Slave loopback */
     TRISAbits.TRISA5 = HIGH; // an4
     TRISBbits.TRISB4 = HIGH; // an11
     TRISBbits.TRISB0 = HIGH; // SS2, don't use for analog
-    TRISBbits.TRISB5 = HIGH; // an13 
+    TRISBbits.TRISB5 = HIGH; // an13
     TRISCbits.TRISC2 = HIGH; // an14
 
     ANSELA = 0b00101111; // analog bit enables
@@ -467,23 +458,43 @@ void main(void) /* SPI Master/Slave loopback */
     INTCONbits.PEIE = 1;
     INTCONbits.GIE = 1;
 
+    SSP2CON1bits.WCOL = SSP2CON1bits.SSPOV = 0;
+
+}
+
+void main(void) /* SPI Master/Slave loopback */
+{
+    int16_t i, j, k = 0, num_ai_chan = 0;
+    uint8_t stuff;
+
+    config_pic(); // setup the slave for work
+
 #ifdef P8722
     init_lcd();
     strncpypgm2ram(bootstr2, build_time, LCD_W);
     LCD_VC_puts(VC0, DS0, YES);
+    /* show build data on LCD */
+    for (i = 0; i < 1000; i++) {
+	for (j = 0; j < 500; j++) {
+	    ClrWdt(); // reset the WDT timer
+	}
+    }
+    sprintf(bootstr2,
+	    "nsaspook                    "
+	    );
+    LCD_VC_puts(VC0, DS0, YES);
     strncpypgm2ram(bootstr2, build_date, LCD_W);
     LCD_VC_puts(VC0, DS1, YES);
 
+    /* show build data on LCD */
     for (i = 0; i < 1000; i++) {
-	for (j = 0; j < 1000; j++) {
+	for (j = 0; j < 500; j++) {
 	    ClrWdt(); // reset the WDT timer
 	}
     }
 #endif
 
-    SSP2CON1bits.WCOL = SSP2CON1bits.SSPOV = 0;
-
-    while (1) { // just loop asking for ADC 0 and 1 and output results on LCD
+    while (1) { // just loop and output results on DIAG LCD
 
 	if (SSP2CON1bits.WCOL || SSP2CON1bits.SSPOV) { // check for overruns/collisions
 #ifdef P8722
@@ -521,8 +532,8 @@ void main(void) /* SPI Master/Slave loopback */
 			LCD_VC_puts(VC0, DS3, YES);
 		    }
 		    sprintf(bootstr2,
-			    "Err %lu, #%lu, I%lu    ",
-			    adc_error_count, adc_count, slave_int_count);
+			    "R%u Err %lu, #%lu, I%lu    ",
+			    (int) REMOTE_LINK, adc_error_count, adc_count, slave_int_count);
 		    LCD_VC_puts(VC0, DS0, YES);
 		    sprintf(bootstr2,
 			    "A %u %u, I%u     ",

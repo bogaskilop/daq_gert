@@ -378,7 +378,7 @@ void init_lcd(void)
 
 void adc_conv_delay(void)
 {
-    int16_t i, j, k = 0;
+    int16_t i, j;
 
     for (i = 0; i < 1; i++) {
 	for (j = 0; j < 20; j++) {
@@ -388,13 +388,14 @@ void adc_conv_delay(void)
 
 void slave_cs_delay(void)
 {
-    int16_t i, j, k = 0;
+    int16_t i, j;
 
     for (i = 0; i < 1; i++) {
 	for (j = 0; j < 10; j++) {
 	}
     }
 }
+
 void clear_spi_data_flag(void)
 {
     SPI_DATA = FALSE;
