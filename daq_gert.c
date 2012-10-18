@@ -73,7 +73,7 @@ WiringPI
  * spi-atmel.c, Copyright (C) 2006 Atmel Corporation
 
 Devices: [] GERTBOARD (daq_gert)
-Status: inprogress (DIO 50%) (AI 5%) AO (5%) (My code cleanup 25%)
+Status: inprogress (DIO 50%) (AI 6%) AO (5%) (My code cleanup 25%)
 Updated: Wed, 3 Oct 2012 12:07:20 +0000
 
 The DAQ-GERT appears in Comedi as a  digital I/O subdevice (0) with
@@ -205,7 +205,7 @@ int (*digitalRead) (int pin);
 #define NUM_DIO_OUTPUTS 8
 /* for for compat with ni_daq_700 used for driver testing, 2 AI channels */
 /* on the real device */
-#define NUM_AI_CHAN 14
+#define NUM_AI_CHAN 12
 #define NUM_AO_CHAN  2
 
 /* Locals to hold pointers to the hardware */
