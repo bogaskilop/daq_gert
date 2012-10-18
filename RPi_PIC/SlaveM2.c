@@ -65,6 +65,7 @@
 
 #define	TIMEROFFSET		26474           // timer0 16bit counter value for 1 second to overflow
 
+#define CS_SLAVE	LATDbits.LATD0
 #define CMD_ADC_GO	0b10000000
 #define CMD_ADC_GO_0	0b10000000
 #define CMD_ADC_GO_1	0b10000001
@@ -385,17 +386,33 @@ void adc_conv_delay(void)
     }
 }
 
+void slave_cs_delay(void)
+{
+    int16_t i, j, k = 0;
+
+    for (i = 0; i < 1; i++) {
+	for (j = 0; j < 10; j++) {
+	}
+    }
+}
 void clear_spi_data_flag(void)
 {
     SPI_DATA = FALSE;
+    CS_SLAVE = LOW;
+    slave_cs_delay();
 }
 
 uint8_t spi_data_recd(void)
 {
     uint32_t delay = 0;
     while (!SPI_DATA) {
-	if (delay++ > 50000) return FALSE;
+	if (delay++ > 50000) {
+	    CS_SLAVE = HIGH;
+	    return FALSE;
+	}
     }
+    slave_cs_delay();
+    CS_SLAVE = HIGH;
     return TRUE;
 }
 
@@ -417,6 +434,7 @@ void main(void) /* SPI Master/Slave loopback */
     TRISDbits.TRISD6 = 0; // SSP2 pins clk out MASTER
     TRISDbits.TRISD5 = 1; // SDI
     TRISDbits.TRISD4 = 0; // SDO
+    TRISDbits.TRISD0 = 0; // CS
 
     TRISCbits.TRISC3 = 1; // SSP1 pins clk in SLAVE
     TRISCbits.TRISC4 = 1; // SDI
@@ -469,8 +487,8 @@ void main(void) /* SPI Master/Slave loopback */
     TRISFbits.TRISF4 = HIGH; // an9
     TRISFbits.TRISF5 = HIGH; // an10
     TRISFbits.TRISF6 = HIGH; // an11
-    TRISFbits.TRISF7 = LOW;  // SS1
-    LATFbits.LATF7=0;	    // enable slave
+    TRISFbits.TRISF7 = LOW; // SS1
+    LATFbits.LATF7 = 0; // enable slave
 
     OpenADC(ADC_FOSC_RC & ADC_RIGHT_JUST & ADC_20_TAD, ADC_CH0 & ADC_REF_VDD_VSS & ADC_INT_ON, ADC_12ANA); // open ADC channel for current and voltage readings
 #endif

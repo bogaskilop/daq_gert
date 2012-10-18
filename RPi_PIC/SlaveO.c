@@ -187,6 +187,9 @@ void InterruptHandlerHigh(void)
 	if ((slave_int_count - last_slave_int_count) < 10) {
 	    ClrWdt(); // reset the WDT timer
 	}
+#ifdef P8722
+	LATEbits.LATE0 = !LATEbits.LATE0;
+#endif
     }
 
     if (PIR1bits.ADIF) { // ADC conversion complete flag
@@ -195,6 +198,9 @@ void InterruptHandlerHigh(void)
 	adc_buffer[channel] = ADRES;
 	SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
 	ADC_DATA = TRUE;
+#ifdef P8722
+	LATEbits.LATE1 = !LATEbits.LATE1;
+#endif
     }
 
     if (PIR3bits.SSP2IF) { // SPI port #2 SLAVE receiver
@@ -215,34 +221,34 @@ void InterruptHandlerHigh(void)
 		ADC_DATA = FALSE;
 		ADCON0bits.GO = 1; // start a conversion
 #ifdef P8722
-		LATEbits.LATE1 = !LATEbits.LATE1;
+		LATEbits.LATE2 = !LATEbits.LATE2;
 #endif
 	    } else {
 		ADCON0bits.GO = 0; // stop a conversion
 		SSP2BUF = CMD_DUMMY; // Tell master  we are here
 		ADC_DATA = FALSE;
 #ifdef P8722
-		LATEbits.LATE2 = !LATEbits.LATE2;
+		LATEbits.LATE3 = !LATEbits.LATE3;
 #endif
 	    }
 	}
 	if (data_in2 == CMD_DUMMY_CFG) {
 	    SSP2BUF = CMD_DUMMY; // Tell master  we are here
 #ifdef P8722
-	    LATEbits.LATE3 = !LATEbits.LATE3;
+	    LATEbits.LATE4 = !LATEbits.LATE4;
 #endif
 	}
 	if (data_in2 == CMD_ADC_DATAL) {
 	    if (!ADCON0bits.GO) {
 		SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
 #ifdef P8722
-		LATEbits.LATE4 = !LATEbits.LATE4;
+		LATEbits.LATE5 = !LATEbits.LATE5;
 #endif
 		last_slave_int_count = slave_int_count;
 		ClrWdt(); // reset the WDT timer
 	    } else {
 #ifdef P8722
-		LATEbits.LATE5 = !LATEbits.LATE5;
+		LATEbits.LATE6 = !LATEbits.LATE6;
 #endif
 		SSP2BUF = CMD_DUMMY;
 	    }
@@ -250,6 +256,9 @@ void InterruptHandlerHigh(void)
 	if (data_in2 == CMD_ADC_DATAH) {
 	    if (!ADCON0bits.GO) {
 		SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
+#ifdef P8722
+		LATEbits.LATE7 = !LATEbits.LATE7;
+#endif
 	    } else {
 		SSP2BUF = CMD_DUMMY;
 	    }
@@ -444,7 +453,7 @@ void main(void) /* SPI Master/Slave loopback */
     PIE1bits.ADIE = HIGH; // the ADC interrupt enable bit
     IPR1bits.ADIP = HIGH; // ADC use high pri
 
-    OpenSPI2(SLV_SSOFF, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6
+    OpenSPI2(SLV_SSON, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6,7
 
     OpenTimer0(TIMER_INT_ON & T0_16BIT & T0_SOURCE_INT & T0_PS_1_256);
     WriteTimer0(TIMEROFFSET); //      start timer0 at 1 second ticks
@@ -488,7 +497,7 @@ void main(void) /* SPI Master/Slave loopback */
 	for (i = 0; i < 1; i++) {
 	    for (j = 0; j < 1; j++) {
 #ifdef P8722
-		if ((((k++) % 5000) == 0) || !REMOTE_LINK) {
+		if ((((k++) % 10000) == 0) || !REMOTE_LINK) {
 		    if (REMOTE_LINK) {
 			sprintf(bootstr2,
 				"SPI U%i %b          ",
@@ -517,7 +526,7 @@ void main(void) /* SPI Master/Slave loopback */
 		    LCD_VC_puts(VC0, DS0, YES);
 		    sprintf(bootstr2,
 			    "A %u %u, I%u     ",
-			    adc_buffer[0], adc_buffer[1],data_in2);
+			    adc_buffer[0], adc_buffer[1], data_in2);
 		    LCD_VC_puts(VC0, DS1, YES);
 		}
 #endif
