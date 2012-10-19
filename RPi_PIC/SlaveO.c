@@ -385,7 +385,7 @@ void config_pic(void)
     LATJ = 0xff;
     LATH = 0xff;
 
-    TRISDbits.TRISD6 = 0; // SSP2 pins clk out SLAVE
+    TRISDbits.TRISD6 = 0; // SSP2 pins clk in SLAVE
     TRISDbits.TRISD5 = 1; // SDI
     TRISDbits.TRISD4 = 0; // SDO
     TRISDbits.TRISD7 = 1; // SS2
