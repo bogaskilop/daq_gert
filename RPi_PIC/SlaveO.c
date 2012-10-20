@@ -57,15 +57,16 @@
 #include <math.h>
 #include <GenericTypeDefs.h>
 
-/* bit 7 high for command
+/*
+ * bit 7 high for command
  * bit 6 0 send lower or 1 send upper byte ADC result first
+ * bits 3..0 port address
  *
- * bit 7 low  for config data in CMD_DUMMY per uC type
+ * bit 7 low  for config data sent in CMD_DUMMY per uC type
  * bits 6 config bit code always 1
  * bit	5 0=ADC ref VDD 1=ADC rec FVR=2.048
  * bit  4 0=10bit adc, 1=12bit adc
- * bits 3..0 port address
- *
+ * 
  */
 
 #define	TIMEROFFSET		26474           // timer0 16bit counter value for 1 second to overflow
@@ -178,7 +179,7 @@ void InterruptVectorHigh(void)
 
 void InterruptHandlerHigh(void)
 {
-    static uint8_t channel = 0, link, upper;
+    static uint8_t channel = 0, link, upper, command;
     static union Timers timer;
 
     if (INTCONbits.TMR0IF) { // check timer0 irq 1 second timer int handler
@@ -219,7 +220,8 @@ void InterruptHandlerHigh(void)
 	PIR3bits.SSP2IF = LOW;
 	slave_int_count++;
 	data_in2 = SSP2BUF;
-	if ((data_in2 & 0b10000000) > 0) { // Found a Master command
+	command = data_in2 & 0xf0;
+	if ((command == CMD_ADC_GO) || (command == CMD_ADC_GO_H)) { // Found a GO command
 	    if ((data_in2 & 0b01000000) > 0) {
 		upper = TRUE;
 #ifdef P8722

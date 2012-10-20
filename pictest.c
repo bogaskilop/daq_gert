@@ -61,7 +61,7 @@ static void transfer(int fd) {
         .cs_change = 1
     };
 
-    printf("\r");
+    printf("\r\n");
     for (cmd_seq = 0; cmd_seq < 3; cmd_seq++) {
         tx[0] = cmd_txt[cmd_seq];
         ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
