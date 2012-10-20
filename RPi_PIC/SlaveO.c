@@ -10,7 +10,7 @@
  * The I/O and clock pins
  * have been interconnected in the standard way for a PIC18F8722 chip
  *
- * Version	0.02 The testing hardware is mainly a pic18f8722 with a
+ * Version	0.03 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
  *		The target hardware for field use will be the pic18f25k22
  *		due to its 28 pin dip format, BUT is nto currenetly being
@@ -219,7 +219,7 @@ void InterruptHandlerHigh(void)
 	PIR3bits.SSP2IF = LOW;
 	slave_int_count++;
 	data_in2 = SSP2BUF;
-	if ((data_in2 & 0x80) == CMD_ADC_GO) { // Found a Master command
+	if ((data_in2 & 0b10000000) > 0) { // Found a Master command
 	    if ((data_in2 & 0b01000000) > 0) {
 		upper = TRUE;
 #ifdef P8722
