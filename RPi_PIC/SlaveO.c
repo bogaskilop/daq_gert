@@ -195,7 +195,7 @@ void InterruptHandlerHigh(void)
 	link = FALSE;
 	REMOTE_LINK = FALSE;
 #ifdef P8722
-	LATEbits.LATE0 = !LATEbits.LATE0;
+	LATEbits.LATE0 = LOW;
 #endif
     }
 
