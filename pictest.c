@@ -9,6 +9,7 @@
  * the Free Software Foundation; either version 2 of the License.
  *
  * Cross-compile with cross-gcc -I/path/to/cross-kernel/include
+ * Modified 10-19-2012 for daq_gert testing nsaspook@nsaspook.com
  */
 
 #include <stdint.h>
@@ -22,8 +23,8 @@
 #include <linux/spi/spidev.h>
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-#define CMD_ADC_GO	0b10000000
-#define CMD_ADC_GO_H	0b11000000
+#define CMD_ADC_GO	0b10000000      // send data low byte first
+#define CMD_ADC_GO_H	0b11000000      // send data high byte first
 #define CMD_ADC_DONE	0b11110000
 #define CMD_ADC_DATA	0b10010000
 
@@ -43,12 +44,12 @@ static uint32_t speed = 500000;
 static uint16_t delay = 20;
 
 static void transfer(int fd) {
-    int ret, cmd_seq;
-	static unsigned long	tx_count=0;
+    int ret, cmd_seq, chan;
+    static unsigned long tx_count = 0;
     static uint8_t tx[1], rx_buffer[3], cmd_txt[] = {
-        CMD_ADC_GO,
-        CMD_ADC_DATA,
-        CMD_DUMMY_CFG
+        CMD_ADC_GO_H, // start conversion on channel 0 and send data high first
+        CMD_ADC_DATA, // send the next byte of data
+        CMD_DUMMY_CFG // dummy to get last byte
     };
     static uint8_t rx[ARRAY_SIZE(tx)] = {0,};
     struct spi_ioc_transfer tr = {
@@ -62,16 +63,23 @@ static void transfer(int fd) {
     };
 
     printf("\r\n");
-    for (cmd_seq = 0; cmd_seq < 3; cmd_seq++) {
-        tx[0] = cmd_txt[cmd_seq];
-        ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
-        if (ret < 1)
-            pabort("can't send spi message");
+    for (chan = 0; chan < 12; chan++) {
+        for (cmd_seq = 0; cmd_seq < 3; cmd_seq++) {
+            tx[0] = cmd_txt[cmd_seq]; // load command data
+            if (cmd_seq == 0) tx[0] += chan; // set the channel
+            ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
+            if (ret < 1)
+                pabort("can't send spi message");
 
-        rx_buffer[cmd_seq] = rx[0];
-        if (cmd_seq == 0) usleep(150); // wait for ADC conversion
+            rx_buffer[cmd_seq] = rx[0]; // read the result from the remote ADC
+            if (cmd_seq == 0) usleep(150); // wait for ADC conversion
+        }
+        if (rx_buffer[0] != 0xff) {
+            printf("Chan %i %.2X %.2X %.2X: ", chan, rx_buffer[0], rx_buffer[1], rx_buffer[2]);
+        } else {
+            printf("No data from SPI ");
+        }
     }
-    printf(" %.2X %.2X %.2X %ul", rx_buffer[0], rx_buffer[1], rx_buffer[2],tx_count++);
 }
 
 static void print_usage(const char *prog) {
