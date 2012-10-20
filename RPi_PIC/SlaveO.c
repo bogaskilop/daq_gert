@@ -10,7 +10,7 @@
  * The I/O and clock pins
  * have been interconnected in the standard way for a PIC18F8722 chip
  *
- * Version	0.03 The testing hardware is mainly a pic18f8722 with a
+ * Version	0.04 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
  *		The target hardware for field use will be the pic18f25k22
  *		due to its 28 pin dip format, BUT is not currenetly being
@@ -58,7 +58,7 @@
 #include <GenericTypeDefs.h>
 
 /*
- * bit 7 high for command
+ * bit 7 high for commands sent from the MASTER
  * bit 6 0 send lower or 1 send upper byte ADC result first
  * bits 3..0 port address
  *
