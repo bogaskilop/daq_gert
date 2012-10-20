@@ -497,9 +497,9 @@ void main(void) /* SPI Master/Slave loopback */
     PIE1bits.ADIE = HIGH; // the ADC interrupt enable bit
     IPR1bits.ADIP = HIGH; // ADC use high pri
 
-    OpenSPI1(SLV_SSON, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
+    OpenSPI1(SLV_SSON, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port C 4,5,3
 #ifdef P8722
-    OpenSPI2(SPI_FOSC_64, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6
+    OpenSPI2(SPI_FOSC_64, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6
 #endif
 
     OpenTimer0(TIMER_INT_ON & T0_16BIT & T0_SOURCE_INT & T0_PS_1_256);

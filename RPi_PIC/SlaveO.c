@@ -58,6 +58,8 @@
 #include <GenericTypeDefs.h>
 
 /* bit 7 high for command
+ * bit 6 0 send lower or 1 send upper byte ADC result first
+ *
  * bit 7 low  for config data in CMD_DUMMY per uC type
  * bits 6 config bit code always 1
  * bit	5 0=ADC ref VDD 1=ADC rec FVR=2.048
@@ -69,11 +71,9 @@
 #define	TIMEROFFSET		26474           // timer0 16bit counter value for 1 second to overflow
 
 #define CMD_ADC_GO	0b10000000
-#define CMD_ADC_GO_0	0b10000000
-#define CMD_ADC_GO_1	0b10000001
+#define CMD_ADC_GO_H	0b11000000
 #define CMD_ADC_DONE	0b11110000
-#define CMD_ADC_DATAL	0b10010000
-#define CMD_ADC_DATAH	0b10100000
+#define CMD_ADC_DATA	0b10010000
 
 #define CMD_DUMMY_CFG	0b01000000
 #ifdef P8722
@@ -178,7 +178,7 @@ void InterruptVectorHigh(void)
 
 void InterruptHandlerHigh(void)
 {
-    static uint8_t channel = 0, link;
+    static uint8_t channel = 0, link, upper;
     static union Timers timer;
 
     if (INTCONbits.TMR0IF) { // check timer0 irq 1 second timer int handler
@@ -203,7 +203,11 @@ void InterruptHandlerHigh(void)
 	PIR1bits.ADIF = LOW;
 	adc_count++; // just keep count
 	adc_buffer[channel] = ADRES;
-	SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
+	if (upper) {
+	    SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
+	} else {
+	    SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
+	}
 	ADC_DATA = TRUE;
 #ifdef P8722
 	LATEbits.LATE1 = !LATEbits.LATE1;
@@ -215,7 +219,18 @@ void InterruptHandlerHigh(void)
 	PIR3bits.SSP2IF = LOW;
 	slave_int_count++;
 	data_in2 = SSP2BUF;
-	if ((data_in2 & 0xf0) == CMD_ADC_GO) { // Found a Master command
+	if ((data_in2 & 0x80) == CMD_ADC_GO) { // Found a Master command
+	    if ((data_in2 & 0b01000000) > 0) {
+		upper = TRUE;
+#ifdef P8722
+		LATEbits.LATE7 = LOW;
+#endif
+	    } else {
+		upper = FALSE;
+#ifdef P8722
+		LATEbits.LATE7 = HIGH;
+#endif
+	    }
 	    channel = data_in2 & 0x0f;
 #ifdef P25K22
 	    if (channel > 4) channel += 7; // skip missing channels
@@ -246,9 +261,13 @@ void InterruptHandlerHigh(void)
 	    LATEbits.LATE4 = !LATEbits.LATE4;
 #endif
 	}
-	if (data_in2 == CMD_ADC_DATAL) {
+	if (data_in2 == CMD_ADC_DATA) {
 	    if (!ADCON0bits.GO) {
-		SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
+		if (upper) {
+		    SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
+		} else {
+		    SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
+		}
 #ifdef P8722
 		LATEbits.LATE5 = !LATEbits.LATE5;
 #endif
@@ -268,16 +287,6 @@ void InterruptHandlerHigh(void)
 #ifdef P8722
 		LATEbits.LATE6 = !LATEbits.LATE6;
 #endif
-		SSP2BUF = CMD_DUMMY;
-	    }
-	}
-	if (data_in2 == CMD_ADC_DATAH) {
-	    if (!ADCON0bits.GO) {
-		SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
-#ifdef P8722
-		LATEbits.LATE7 = !LATEbits.LATE7;
-#endif
-	    } else {
 		SSP2BUF = CMD_DUMMY;
 	    }
 	}
@@ -444,7 +453,7 @@ void config_pic(void)
     PIE1bits.ADIE = HIGH; // the ADC interrupt enable bit
     IPR1bits.ADIP = HIGH; // ADC use high pri
 
-    OpenSPI2(SLV_SSON, MODE_01, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6,7
+    OpenSPI2(SLV_SSON, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6,7
 
     OpenTimer0(TIMER_INT_ON & T0_16BIT & T0_SOURCE_INT & T0_PS_1_256);
     WriteTimer0(TIMEROFFSET); //      start timer0 at 1 second ticks
