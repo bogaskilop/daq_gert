@@ -64,8 +64,9 @@
  *
  * bit 7 low  for config data sent in CMD_DUMMY per uC type
  * bits 6 config bit code always 1
- * bit	5 0=ADC ref VDD 1=ADC rec FVR=2.048
+ * bit	5 0=ADC ref VDD, 1=ADC rec FVR=2.048
  * bit  4 0=10bit adc, 1=12bit adc
+ * bits 3..0 number of ADC channels
  * 
  */
 
