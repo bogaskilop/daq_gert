@@ -46,7 +46,7 @@ static void transfer(int fd) {
     int ret, cmd_seq;
 	static unsigned long	tx_count=0;
     static uint8_t tx[1], rx_buffer[3], cmd_txt[] = {
-        CMD_ADC_GO_H,
+        CMD_ADC_GO,
         CMD_ADC_DATA,
         CMD_DUMMY_CFG
     };
@@ -69,7 +69,7 @@ static void transfer(int fd) {
             pabort("can't send spi message");
 
         rx_buffer[cmd_seq] = rx[0];
-        if (cmd_seq == 0) usleep(200); // wait for ADC conversion
+        if (cmd_seq == 0) usleep(150); // wait for ADC conversion
     }
     printf(" %.2X %.2X %.2X %ul", rx_buffer[0], rx_buffer[1], rx_buffer[2],tx_count++);
 }
