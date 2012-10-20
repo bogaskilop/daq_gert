@@ -13,7 +13,7 @@
  * Version	0.03 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
  *		The target hardware for field use will be the pic18f25k22
- *		due to its 28 pin dip format, BUT is nto currenetly being
+ *		due to its 28 pin dip format, BUT is not currenetly being
  *		tested.
  *		define the CPU type below.
  *
@@ -40,7 +40,7 @@
 #include <p18f25k22.h>
 #pragma	config	FOSC = INTIO7
 #pragma config	PLLCFG=ON
-#pragma config	WDTEN = OFF
+#pragma config	WDTEN = ON, WDTPS = 1024
 #pragma config	CCP2MX = PORTC1, PBADEN = OFF, T3CMX = PORTC0
 #pragma config	BOREN = OFF
 #pragma config	STVREN = ON
@@ -69,7 +69,8 @@
  * 
  */
 
-#define	TIMEROFFSET		26474           // timer0 16bit counter value for 1 second to overflow
+#define	TIMEROFFSET	26474           // timer0 16bit counter value for 1 second to overflow
+#define SLAVE_ACTIVE	10		// Activity counter level
 
 #define CMD_ADC_GO	0b10000000
 #define CMD_ADC_GO_H	0b11000000
@@ -82,8 +83,8 @@
 #define NUM_AI_CHAN	12
 #endif
 #ifdef P25K22
-#define CMD_DUMMY	0b01101001	/* 9 channels 2.048 but only 8 are ADC */
-#define NUM_AI_CHAN     9
+#define CMD_DUMMY	0b01101110	/* 14 channels 2.048 but only 13 are ADC */
+#define NUM_AI_CHAN     14
 #endif
 
 /* LCD defines */
@@ -123,6 +124,27 @@
 #define R_ALL_ON	0xff
 #define NO		LOW
 #define YES		HIGH
+
+#ifdef P8722
+#define DLED0		LATEbits.LATE0
+#define DLED1		LATEbits.LATE1
+#define DLED2		LATEbits.LATE2
+#define DLED3		LATEbits.LATE3
+#define DLED4		LATEbits.LATE4
+#define DLED5		LATEbits.LATE5
+#define DLED6		LATEbits.LATE6
+#define DLED7		LATEbits.LATE7
+#endif
+#ifdef P25K22
+#define DLED0		LATCbits.LATC0
+#define DLED1		LATCbits.LATC1
+#define DLED2		LATCbits.LATC0
+#define DLED3		LATCbits.LATC0
+#define DLED4		LATCbits.LATC0
+#define DLED5		LATCbits.LATC0
+#define DLED6		LATCbits.LATC0
+#define DLED7		LATCbits.LATC0
+#endif
 
 #ifdef INTTYPES
 #include <stdint.h>
@@ -190,14 +212,12 @@ void InterruptHandlerHigh(void)
 	TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
 	TMR0L = timer.bt[LOW]; // Write low byte to Timer0
 	/* if we are just idle don't reset the PIC */
-	if ((slave_int_count - last_slave_int_count) < 10) {
+	if ((slave_int_count - last_slave_int_count) < SLAVE_ACTIVE) {
 	    ClrWdt(); // reset the WDT timer
 	}
 	link = FALSE;
 	REMOTE_LINK = FALSE;
-#ifdef P8722
-	LATEbits.LATE0 = LOW;
-#endif
+	DLED0 = LOW;
     }
 
     if (PIR1bits.ADIF) { // ADC conversion complete flag
@@ -210,9 +230,7 @@ void InterruptHandlerHigh(void)
 	    SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
 	}
 	ADC_DATA = TRUE;
-#ifdef P8722
-	LATEbits.LATE1 = !LATEbits.LATE1;
-#endif
+	DLED1 = !DLED1;
     }
 
     /* we only get this when the master  wants data, the slave never generates one */
@@ -224,19 +242,15 @@ void InterruptHandlerHigh(void)
 	if ((command == CMD_ADC_GO) || (command == CMD_ADC_GO_H)) { // Found a GO command
 	    if ((data_in2 & 0b01000000) > 0) {
 		upper = TRUE;
-#ifdef P8722
-		LATEbits.LATE7 = LOW;
-#endif
+		DLED7 = LOW;
 	    } else {
 		upper = FALSE;
-#ifdef P8722
-		LATEbits.LATE7 = HIGH;
-#endif
+		DLED7 = HIGH;
 	    }
 	    channel = data_in2 & 0x0f;
 #ifdef P25K22
 	    if (channel > 4) channel += 7; // skip missing channels
-	    if (channel > 14) channel = 0; // invalid to set to 0
+	    if (channel > 19) channel = 0; // invalid to set to 0
 #endif
 #ifdef P8722
 	    if (channel > 11) channel = 0; // invalid so set to 0
@@ -244,24 +258,18 @@ void InterruptHandlerHigh(void)
 	    if (!ADCON0bits.GO) {
 		ADCON0 = ((channel << 2) & 0b00111100) | (ADCON0 & 0b11000011);
 		ADC_DATA = FALSE;
-		ADCON0bits.GO = 1; // start a conversion
-#ifdef P8722
-		LATEbits.LATE2 = !LATEbits.LATE2;
-#endif
+		ADCON0bits.GO = HIGH; // start a conversion
+		DLED2 = !DLED2;
 	    } else {
-		ADCON0bits.GO = 0; // stop a conversion
+		ADCON0bits.GO = LOW; // stop a conversion
 		SSP2BUF = CMD_DUMMY; // Tell master  we are here
 		ADC_DATA = FALSE;
-#ifdef P8722
-		LATEbits.LATE3 = !LATEbits.LATE3;
-#endif
+		DLED3 = !DLED3;
 	    }
 	}
 	if (data_in2 == CMD_DUMMY_CFG) {
 	    SSP2BUF = CMD_DUMMY; // Tell master  we are here
-#ifdef P8722
-	    LATEbits.LATE4 = !LATEbits.LATE4;
-#endif
+	    DLED4 = !DLED4;
 	}
 	if (data_in2 == CMD_ADC_DATA) {
 	    if (!ADCON0bits.GO) {
@@ -270,25 +278,19 @@ void InterruptHandlerHigh(void)
 		} else {
 		    SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
 		}
-#ifdef P8722
-		LATEbits.LATE5 = !LATEbits.LATE5;
-#endif
+		DLED5 = !DLED5;
 		last_slave_int_count = slave_int_count;
 		ClrWdt(); // reset the WDT timer
 		REMOTE_LINK = TRUE;
 		link = TRUE;
-#ifdef P8722
-		LATEbits.LATE0 = HIGH;
-#endif
-		/* reset link data timer */
+		DLED0 = HIGH;
+		/* reset link data timer if we are talking */
 		timer.lt = TIMEROFFSET; // Copy timer value into union
 		TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
 		TMR0L = timer.bt[LOW]; // Write low byte to Timer0
 		INTCONbits.TMR0IF = LOW; //clear possible interrupt flag
 	    } else {
-#ifdef P8722
-		LATEbits.LATE6 = !LATEbits.LATE6;
-#endif
+		DLED6 = !DLED6;
 		SSP2BUF = CMD_DUMMY;
 	    }
 	}
@@ -387,16 +389,20 @@ void init_lcd(void)
 void config_pic(void)
 {
 #ifdef P8722
-    TRISB = 0xff; // external interrupts for later
-    TRISE = 0;
+    TRISBbits.TRISB4 = 1; // QEI encoder inputs
+    TRISBbits.TRISB5 = 1;
+    TRISBbits.TRISB6 = 1;
+    TRISBbits.TRISB7 = 1;
+
+    TRISE = 0; // all outputs dor DIAG leds
     TRISF = 0;
     TRISJ = 0;
     TRISH = LOW; // mpuled and LCD
-    LATE = 0xff;
+    LATE = 0xff; // all LEDS off
     LATJ = 0xff;
     LATH = 0xff;
 
-    TRISDbits.TRISD6 = 0; // SSP2 pins clk in SLAVE
+    TRISDbits.TRISD6 = 1; // SSP2 pins clk in SLAVE
     TRISDbits.TRISD5 = 1; // SDI
     TRISDbits.TRISD4 = 0; // SDO
     TRISDbits.TRISD7 = 1; // SS2
@@ -404,18 +410,14 @@ void config_pic(void)
     ADCON1 = 0x03; // adc [0..11] enable
 #endif
 #ifdef P25K22
-    TRISCbits.TRISC6 = 0; // Diag led
-    TRISCbits.TRISC7 = 0; // Diag led
-    TRISAbits.TRISA6 = 0; // clock out
+    TRISC = 0b11111100; // [0..1] outputs for DIAG leds [2..7] for analog
+    LATC = 0x03; // all LEDS off
+    TRISAbits.TRISA6 = 0; // CPU clock out
 
-    TRISBbits.TRISB1 = 0; // SSP2 pins MASTER
-    TRISBbits.TRISB2 = 1;
-    TRISBbits.TRISB3 = 0;
-
-    TRISCbits.TRISC3 = 1; // SSP1 pins SLAVE
-    TRISCbits.TRISC4 = 1;
-    TRISCbits.TRISC5 = 0;
-
+    TRISBbits.TRISB1 = 1; // SSP2 pins clk in SLAVE
+    TRISBbits.TRISB2 = 1; // SDI
+    TRISBbits.TRISB3 = 0; // SDO
+    TRISBbits.TRISB0 = 1; // SS2
 
     /* ADC channels setup */
     TRISAbits.TRISA0 = HIGH; // an0
@@ -424,15 +426,25 @@ void config_pic(void)
     TRISAbits.TRISA3 = HIGH; // an3
     TRISAbits.TRISA5 = HIGH; // an4
     TRISBbits.TRISB4 = HIGH; // an11
-    TRISBbits.TRISB0 = HIGH; // SS2, don't use for analog
+    TRISBbits.TRISB0 = HIGH; // an12 SS2, don't use for analog
     TRISBbits.TRISB5 = HIGH; // an13
     TRISCbits.TRISC2 = HIGH; // an14
+    TRISCbits.TRISC3 = HIGH; // an15
+    TRISCbits.TRISC4 = HIGH; // an16
+    TRISCbits.TRISC5 = HIGH; // an17
+    TRISCbits.TRISC6 = HIGH; // an17
+    TRISCbits.TRISC7 = HIGH; // an18
+
+    TRISBbits.TRISB4 = 1; // QEI encoder inputs
+    TRISBbits.TRISB5 = 1;
+    TRISBbits.TRISB6 = 1;
+    TRISBbits.TRISB7 = 1;
 
     ANSELA = 0b00101111; // analog bit enables
     ANSELB = 0b00110000; // analog bit enables
-    ANSELC = 0b00000100; // analog bit enables
+    ANSELC = 0b11111100; // analog bit enables
     VREFCON0 = 0b11100000; // ADC voltage ref 2.048 volts
-    OpenADC(ADC_FOSC_RC & ADC_RIGHT_JUST & ADC_20_TAD, ADC_CH0 & ADC_INT_ON, ADC_REF_FVR_BUF & ADC_REF_VDD_VSS); // open ADC channel for current and voltage readings
+    OpenADC(ADC_FOSC_RC & ADC_RIGHT_JUST & ADC_20_TAD, ADC_CH0 & ADC_INT_ON, ADC_REF_FVR_BUF & ADC_REF_VDD_VSS); // open ADC channel
 #endif
 
 #ifdef P8722
@@ -448,28 +460,28 @@ void config_pic(void)
     TRISFbits.TRISF4 = HIGH; // an9
     TRISFbits.TRISF5 = HIGH; // an10
     TRISFbits.TRISF6 = HIGH; // an11
-
-    OpenADC(ADC_FOSC_RC & ADC_RIGHT_JUST & ADC_20_TAD, ADC_CH0 & ADC_REF_VDD_VSS & ADC_INT_ON, ADC_12ANA); // open ADC channel for current and voltage readings
+    OpenADC(ADC_FOSC_RC & ADC_RIGHT_JUST & ADC_20_TAD, ADC_CH0 & ADC_REF_VDD_VSS & ADC_INT_ON, ADC_12ANA); // open ADC channel
 #endif
 
     PIE1bits.ADIE = HIGH; // the ADC interrupt enable bit
     IPR1bits.ADIP = HIGH; // ADC use high pri
 
-    OpenSPI2(SLV_SSON, MODE_11, SMPMID); // Must be SMPMID in slave mode, Port D 4,5,6,7
+    OpenSPI2(SLV_SSON, MODE_11, SMPMID); // Must be SMPMID in slave mode
+    SSP2BUF = CMD_DUMMY_CFG;
 
+    /* System activity timer, can reset the processor */
     OpenTimer0(TIMER_INT_ON & T0_16BIT & T0_SOURCE_INT & T0_PS_1_256);
     WriteTimer0(TIMEROFFSET); //      start timer0 at 1 second ticks
 
-    SSP2BUF = CMD_DUMMY_CFG;
+    /* clear SPI module possible flag and enable interrupts*/
+    PIR3bits.SSP2IF = LOW;
+    PIE3bits.SSP2IE = HIGH;
 
-#ifdef P8722
-    PIR3bits.SSP2IF = 0;
-    PIE3bits.SSP2IE = 1;
-#endif
-    INTCONbits.PEIE = 1;
-    INTCONbits.GIE = 1;
-
-    SSP2CON1bits.WCOL = SSP2CON1bits.SSPOV = 0;
+    /* Enable global interrupts */
+    INTCONbits.PEIE = HIGH;
+    INTCONbits.GIE = HIGH;
+    /* clear any SSP error bits */
+    SSP2CON1bits.WCOL = SSP2CON1bits.SSPOV = LOW;
 
 }
 
