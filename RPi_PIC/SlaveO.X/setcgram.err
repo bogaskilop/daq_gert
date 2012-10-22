@@ -1,0 +1,25 @@
+Error[1105] ../xlcd/setcgram.c 29 : symbol 'TRISH' has not been defined
+Error[1101] ../xlcd/setcgram.c 29 : lvalue required
+Error[1105] ../xlcd/setcgram.c 30 : symbol 'PORTH' has not been defined
+Error[1101] ../xlcd/setcgram.c 30 : lvalue required
+Error[1105] ../xlcd/setcgram.c 31 : symbol 'PORTH' has not been defined
+Error[1101] ../xlcd/setcgram.c 31 : lvalue required
+Error[1105] ../xlcd/setcgram.c 37 : symbol 'LATHbits' has not been defined
+Error[1151] ../xlcd/setcgram.c 37 : struct or union object designator expected
+Error[1101] ../xlcd/setcgram.c 37 : lvalue required
+Error[1105] ../xlcd/setcgram.c 38 : symbol 'LATHbits' has not been defined
+Error[1151] ../xlcd/setcgram.c 38 : struct or union object designator expected
+Error[1101] ../xlcd/setcgram.c 38 : lvalue required
+Error[1105] ../xlcd/setcgram.c 40 : symbol 'LATHbits' has not been defined
+Error[1151] ../xlcd/setcgram.c 40 : struct or union object designator expected
+Error[1101] ../xlcd/setcgram.c 40 : lvalue required
+Error[1105] ../xlcd/setcgram.c 42 : symbol 'LATHbits' has not been defined
+Error[1151] ../xlcd/setcgram.c 42 : struct or union object designator expected
+Error[1101] ../xlcd/setcgram.c 42 : lvalue required
+Error[1105] ../xlcd/setcgram.c 44 : symbol 'PORTH' has not been defined
+Error[1101] ../xlcd/setcgram.c 44 : lvalue required
+Error[1105] ../xlcd/setcgram.c 45 : symbol 'PORTH' has not been defined
+Error[1101] ../xlcd/setcgram.c 45 : lvalue required
+Error[1105] ../xlcd/setcgram.c 51 : symbol 'LATHbits' has not been defined
+Error[1151] ../xlcd/setcgram.c 51 : struct or union object designator expected
+Error[1101] ../xlcd/setcgram.c 51 : lvalue required

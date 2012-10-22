@@ -23,8 +23,8 @@
  * nsaspook@nsaspook.com    Oct 2012
  */
 
-//#define P25K22
-#define P8722
+#define P25K22
+//#define P8722
 
 #ifdef P8722
 #include "xlcd.h"
@@ -139,12 +139,12 @@
 #ifdef P25K22
 #define DLED0		LATCbits.LATC0
 #define DLED1		LATCbits.LATC1
-#define DLED2		LATCbits.LATC0
-#define DLED3		LATCbits.LATC0
-#define DLED4		LATCbits.LATC0
-#define DLED5		LATCbits.LATC0
-#define DLED6		LATCbits.LATC0
-#define DLED7		LATCbits.LATC0
+#define DLED2		LATCbits.LATC1
+#define DLED3		LATCbits.LATC1
+#define DLED4		LATCbits.LATC1
+#define DLED5		LATCbits.LATC1
+#define DLED6		LATCbits.LATC1
+#define DLED7		LATCbits.LATC1
 #endif
 
 #ifdef INTTYPES
