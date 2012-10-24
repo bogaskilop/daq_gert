@@ -142,6 +142,7 @@ IRQ is assigned but not used.
 #include <linux/log2.h>
 #include <linux/sched.h>
 #include <linux/wait.h>
+#include <linux/mutex.h>
 
 /* Function stubs */
 void (*pinMode) (int pin, int mode);
@@ -163,7 +164,7 @@ struct comedi_control {
     u8 *rx_buff;
 };
 static struct comedi_control comedi_ctl;
-#define SPI_BUFF_SIZE 1
+#define SPI_BUFF_SIZE 16
 
 #define CMD_ADC_GO	0b10000000      // send data low byte first
 #define CMD_ADC_GO_H	0b11000000      // send data high byte first
@@ -1103,6 +1104,14 @@ static void comedi_spi_msg(unsigned char data) {
     spi_message_add_tail(&comedi_ctl.transfer, &comedi_ctl.msg);
 }
 
+static int comedi_do_one_message(unsigned char msgdata) {
+    int status;
+
+    comedi_spi_msg(msgdata);
+    status = bcm2708_spi_transfer(comedi_spi, &comedi_ctl.msg);
+    return status;
+}
+
 static int daqgert_ai_rinsn(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
@@ -1112,14 +1121,12 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     chan = CR_CHAN(insn->chanspec);
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
-        /* Make a SPI message */
-        comedi_spi_msg(CMD_ADC_GO_H + chan);
-        /* Start the SPI transfer */
-        bcm2708_spi_transfer(comedi_spi, &comedi_ctl.msg);
+        /* Make SPI messages */
+        comedi_do_one_message(CMD_ADC_GO_H + chan);
         udelay(150);
-        comedi_spi_msg(CMD_ADC_DATA);
+        comedi_do_one_message(CMD_ADC_DATA);
         data[n] = comedi_ctl.rx_buff[0] << 8;
-        comedi_spi_msg(CMD_DUMMY_CFG);
+        comedi_do_one_message(CMD_DUMMY_CFG);
         data[n] += comedi_ctl.rx_buff[0];
     }
     return n;
