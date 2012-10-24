@@ -153,7 +153,22 @@ void (*setPadDrive) (int group, int value);
 int (*digitalRead) (int pin);
 
 static unsigned char comedi_spi_mode = 0;
+static unsigned long comedi_count = 0;
+static struct spi_device *comedi_spi;
 
+struct comedi_control {
+    struct spi_message msg;
+    struct spi_transfer transfer;
+    u8 *tx_buff;
+    u8 *rx_buff;
+};
+static struct comedi_control comedi_ctl;
+#define SPI_BUFF_SIZE 1
+
+#define CMD_ADC_GO	0b10000000      // send data low byte first
+#define CMD_ADC_GO_H	0b11000000      // send data high byte first
+#define CMD_ADC_DATA	0b10010000
+#define CMD_DUMMY_CFG	0b01000000
 
 /* SPI register offsets */
 #define SPI_CS			0x00
@@ -358,6 +373,8 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
     int ret;
     u32 cs;
 
+    dev_info(&spi->dev, "spi_transfer_process start %lu\n", comedi_count++);
+    dev_info(&spi->dev, "spi_transfer_process data cmd tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
     if (bs->stopping)
         return -ESHUTDOWN;
 
@@ -401,6 +418,7 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
 
     msg->actual_length += (xfer->len - bs->len);
 
+    dev_info(&spi->dev, "spi_transfer_process stop data result tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
     return 0;
 }
 
@@ -411,6 +429,7 @@ static void bcm2708_work(struct work_struct *work) {
     struct spi_transfer *xfer;
     int status = 0;
 
+    dev_info(&comedi_spi->dev, "bcm2708_work start %lu\n", comedi_count++);
     spin_lock_irqsave(&bs->lock, flags);
     while (!list_empty(&bs->queue)) {
         msg = list_first_entry(&bs->queue, struct spi_message, queue);
@@ -429,6 +448,7 @@ static void bcm2708_work(struct work_struct *work) {
         spin_lock_irqsave(&bs->lock, flags);
     }
     spin_unlock_irqrestore(&bs->lock, flags);
+    dev_info(&comedi_spi->dev, "bcm2708_work stop \n");
 }
 
 static int bcm2708_spi_setup(struct spi_device *spi) {
@@ -436,9 +456,10 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
     struct bcm2708_spi_state *state;
     int ret;
 
-    if (!comedi_spi_mode) {
-        spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01;
-        comedi_spi_mode = 1;
+    if (!comedi_spi_mode) { /* we need a device to talk to */
+        spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
+        comedi_spi_mode = 1; /* we have a device to talk too */
+        comedi_spi = spi; /* get a copy of the slave device */
     }
 
     if (bs->stopping)
@@ -484,6 +505,7 @@ static int bcm2708_spi_transfer(struct spi_device *spi, struct spi_message *msg)
     int ret;
     unsigned long flags;
 
+    dev_info(&spi->dev, "spi_transfer start %lu\n", comedi_count++);
     if (unlikely(list_empty(&msg->transfers)))
         return -EINVAL;
 
@@ -516,6 +538,7 @@ static int bcm2708_spi_transfer(struct spi_device *spi, struct spi_message *msg)
     queue_work(bs->workq, &bs->work);
     spin_unlock_irqrestore(&bs->lock, flags);
 
+    dev_info(&spi->dev, "spi_transfer stop \n");
     return 0;
 }
 
@@ -1075,23 +1098,35 @@ static void adc_wait(unsigned long delay) {
     udelay(delay);
 }
 
+static void comedi_spi_msg(unsigned char data) {
+    spi_message_init(&comedi_ctl.msg);
+    comedi_ctl.tx_buff[0] = data;
+    comedi_ctl.transfer.len = 1;
+    comedi_ctl.transfer.tx_buf = comedi_ctl.tx_buff;
+    comedi_ctl.transfer.rx_buf = comedi_ctl.rx_buff;
+    spi_message_add_tail(&comedi_ctl.transfer, &comedi_ctl.msg);
+}
+
 static int daqgert_ai_rinsn(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
 
     int n, chan;
-    int d = 512;
-
-    enum {
-        TIMEOUT = 100
-    };
 
     chan = CR_CHAN(insn->chanspec);
+    /* Make a SPI message */
+    comedi_spi_msg(CMD_ADC_GO_H + chan);
+    /* Start the SPI transfer */
+    bcm2708_spi_transfer(comedi_spi, &comedi_ctl.msg);
+    udelay(150);
+    comedi_spi_msg(CMD_ADC_DATA);
+    udelay(150);
+    comedi_spi_msg(CMD_DUMMY_CFG);
 
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
 
-        data[n] = d;
+        data[n] = comedi_ctl.rx_buff[0];
     }
     return n;
 }
@@ -1302,12 +1337,21 @@ static int __init daqgert_init(void) {
     ret = comedi_driver_register(&daqgert_driver);
     if (ret < 0)
         return ret;
+    comedi_ctl.tx_buff = kmalloc(SPI_BUFF_SIZE, GFP_KERNEL | GFP_DMA);
+    if (!comedi_ctl.tx_buff) {
+        return -ENOMEM;
+    }
+    comedi_ctl.rx_buff = comedi_ctl.tx_buff;
 
     return 0;
 }
 module_init(daqgert_init);
 
 static void __exit daqgert_exit(void) {
+
+    if (comedi_ctl.tx_buff)
+        kfree(comedi_ctl.tx_buff);
+
     comedi_driver_unregister(&daqgert_driver);
 }
 module_exit(daqgert_exit);

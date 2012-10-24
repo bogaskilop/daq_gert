@@ -63,7 +63,7 @@ static void transfer(int fd) {
     };
 
     printf("\r\n");
-    for (chan = 0; chan < 12; chan++) {
+    for (chan = 0; chan < 2; chan++) {
         for (cmd_seq = 0; cmd_seq < 3; cmd_seq++) {
             tx[0] = cmd_txt[cmd_seq]; // load command data
             if (cmd_seq == 0) tx[0] += chan; // set the channel
