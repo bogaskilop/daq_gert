@@ -1108,7 +1108,7 @@ static int comedi_do_one_message(unsigned char msgdata) {
     int status;
 
     comedi_spi_msg(msgdata);
-    status = bcm2708_spi_transfer(comedi_spi, &comedi_ctl.msg);
+ //   status = bcm2708_spi_transfer(comedi_spi, &comedi_ctl.msg);
     return status;
 }
 
