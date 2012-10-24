@@ -264,7 +264,6 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
     int ret;
     u32 cs;
 
-    dev_info(&pdev->dev, "spi_transfer_process start\n");
     if (bs->stopping)
         return -ESHUTDOWN;
 
@@ -308,7 +307,6 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
 
     msg->actual_length += (xfer->len - bs->len);
 
-    dev_info(&pdev->dev, "spi_transfer_process stop\n");
     return 0;
 }
 
@@ -386,7 +384,6 @@ static int bcm2708_spi_transfer(struct spi_device *spi, struct spi_message *msg)
     int ret;
     unsigned long flags;
 
-    dev_info(&pdev->dev, "spi_transfer start\n");
     if (unlikely(list_empty(&msg->transfers)))
         return -EINVAL;
 
@@ -420,7 +417,6 @@ static int bcm2708_spi_transfer(struct spi_device *spi, struct spi_message *msg)
     queue_work(bs->workq, &bs->work);
     spin_unlock_irqrestore(&bs->lock, flags);
 
-    dev_info(&pdev->dev, "spi_transfer stop\n");
 
     return 0;
 }
