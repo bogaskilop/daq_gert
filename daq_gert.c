@@ -1094,10 +1094,6 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
     return insn->n;
 }
 
-static void adc_wait(unsigned long delay) {
-    udelay(delay);
-}
-
 static void comedi_spi_msg(unsigned char data) {
     spi_message_init(&comedi_ctl.msg);
     comedi_ctl.tx_buff[0] = data;
@@ -1114,19 +1110,17 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     int n, chan;
 
     chan = CR_CHAN(insn->chanspec);
-    /* Make a SPI message */
-    comedi_spi_msg(CMD_ADC_GO_H + chan);
-    /* Start the SPI transfer */
-    bcm2708_spi_transfer(comedi_spi, &comedi_ctl.msg);
-    udelay(150);
-    comedi_spi_msg(CMD_ADC_DATA);
-    udelay(150);
-    comedi_spi_msg(CMD_DUMMY_CFG);
-
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
-
-        data[n] = comedi_ctl.rx_buff[0];
+        /* Make a SPI message */
+        comedi_spi_msg(CMD_ADC_GO_H + chan);
+        /* Start the SPI transfer */
+        bcm2708_spi_transfer(comedi_spi, &comedi_ctl.msg);
+        udelay(150);
+        comedi_spi_msg(CMD_ADC_DATA);
+        data[n] = comedi_ctl.rx_buff[0] << 8;
+        comedi_spi_msg(CMD_DUMMY_CFG);
+        data[n] += comedi_ctl.rx_buff[0];
     }
     return n;
 }
