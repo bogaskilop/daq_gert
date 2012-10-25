@@ -156,6 +156,8 @@ int (*digitalRead) (int pin);
 static unsigned char comedi_spi_mode = 0;
 static unsigned long comedi_count = 0;
 static struct spi_device *comedi_spi;
+static struct spi_master *comedi_master;
+static struct bcm2708_spi *comedi_bs;
 
 struct comedi_control {
     struct spi_message msg;
@@ -164,6 +166,7 @@ struct comedi_control {
     u8 *rx_buff;
 };
 static struct comedi_control comedi_ctl;
+
 #define SPI_BUFF_SIZE 16
 
 #define CMD_ADC_GO	0b10000000      // send data low byte first
@@ -461,6 +464,7 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
         comedi_spi_mode = 1; /* we have a device to talk too */
         comedi_spi = spi; /* get a copy of the slave device */
+        comedi_ctl.msg.spi=comedi_spi;
     }
 
     if (bs->stopping)
@@ -632,6 +636,8 @@ static int __devinit bcm2708_spi_probe(struct platform_device *pdev) {
         goto out_free_irq;
     }
 
+    comedi_bs=bs;
+    comedi_master=master;
     dev_info(&pdev->dev, "SPI Controller at 0x%08lx (irq %d)\n",
             (unsigned long) regs->start, irq);
 
@@ -1108,7 +1114,7 @@ static int comedi_do_one_message(unsigned char msgdata) {
     int status;
 
     comedi_spi_msg(msgdata);
- //   status = bcm2708_spi_transfer(comedi_spi, &comedi_ctl.msg);
+    status = bcm2708_process_transfer(comedi_bs, &comedi_ctl.msg, &comedi_ctl.transfer);
     return status;
 }
 
