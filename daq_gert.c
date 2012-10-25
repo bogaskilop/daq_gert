@@ -787,7 +787,7 @@ static unsigned int RPisys_rev;
 /* The SPI code has found the IO chips or not  */
 static int gert_detected = FALSE;
 /* default to TRUE in detection code while testing */
-static int spi_adc_chan, spi_adc_range;
+static int spi_adc_chan, spi_adc_range, spi_adc_bits;
 
 static const struct comedi_lrange daqgert_ai_range3_300 = {1,
     {
@@ -1230,6 +1230,7 @@ static int daqgert_ai_config(struct comedi_device *dev,
     }
     spi_adc_chan = comedi_ctl.rx_buff[0]&0x0f;
     spi_adc_range = comedi_ctl.rx_buff[0]&0b00100000;
+    spi_adc_bits = comedi_ctl.rx_buff[0]&0b00010000;
     dev_info(dev->class_dev,
             "PIC spi slave ADC board Board Detected, %i Channels, Range code %i\n",
             spi_adc_chan, spi_adc_range);
@@ -1315,7 +1316,11 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->subdev_flags = SDF_READABLE | SDF_GROUND;
         s->n_chan = num_ai_chan;
         s->len_chanlist = num_ai_chan;
-        s->maxdata = (1 << 10) - 1;
+        if (spi_adc_bits) {
+            s->maxdata = (1 << 12) - 1;
+        } else {
+            s->maxdata = (1 << 10) - 1;
+        }
         if (spi_adc_range) {
             s->range_table = &daqgert_ai_range2_048;
         } else {
