@@ -215,6 +215,13 @@ void InterruptHandlerHigh(void)
 	/* if we are just idle don't reset the PIC */
 	if ((slave_int_count - last_slave_int_count) < SLAVE_ACTIVE) {
 	    ClrWdt(); // reset the WDT timer
+	    DLED1 = HIGH;
+	    DLED2 = HIGH;
+	    DLED3 = HIGH;
+	    DLED4 = HIGH;
+	    DLED5 = HIGH;
+	    DLED6 = HIGH;
+	    DLED7 = HIGH;
 	}
 	link = FALSE;
 	REMOTE_LINK = FALSE;
