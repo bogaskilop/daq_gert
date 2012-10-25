@@ -154,9 +154,9 @@ void (*setPadDrive) (int group, int value);
 int (*digitalRead) (int pin);
 
 static unsigned char comedi_spi_mode = 0;
-static unsigned long comedi_count = 0;
+// static unsigned long comedi_count = 0;
 static struct spi_device *comedi_spi;
-static struct spi_master *comedi_master;
+//static struct spi_master *comedi_master;
 static struct bcm2708_spi *comedi_bs;
 
 struct comedi_control {
@@ -377,8 +377,8 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
     int ret;
     u32 cs;
 
-//    dev_info(&spi->dev, "spi_transfer_process start %lu\n", comedi_count++);
-//    dev_info(&spi->dev, "spi_transfer_process data cmd tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
+    //    dev_info(&spi->dev, "spi_transfer_process start %lu\n", comedi_count++);
+    //    dev_info(&spi->dev, "spi_transfer_process data cmd tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
     if (bs->stopping)
         return -ESHUTDOWN;
 
@@ -422,7 +422,7 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
 
     msg->actual_length += (xfer->len - bs->len);
 
-//    dev_info(&spi->dev, "spi_transfer_process stop data result tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
+    //    dev_info(&spi->dev, "spi_transfer_process stop data result tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
     return 0;
 }
 
@@ -433,7 +433,6 @@ static void bcm2708_work(struct work_struct *work) {
     struct spi_transfer *xfer;
     int status = 0;
 
-//    dev_info(&comedi_spi->dev, "bcm2708_work start %lu\n", comedi_count++);
     spin_lock_irqsave(&bs->lock, flags);
     while (!list_empty(&bs->queue)) {
         msg = list_first_entry(&bs->queue, struct spi_message, queue);
@@ -452,7 +451,6 @@ static void bcm2708_work(struct work_struct *work) {
         spin_lock_irqsave(&bs->lock, flags);
     }
     spin_unlock_irqrestore(&bs->lock, flags);
-//    dev_info(&comedi_spi->dev, "bcm2708_work stop \n");
 }
 
 static int bcm2708_spi_setup(struct spi_device *spi) {
@@ -460,6 +458,7 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
     struct bcm2708_spi_state *state;
     int ret;
 
+    /* Create SPI channel for Comedi */
     if (!comedi_spi_mode) { /* we need a device to talk to */
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
         comedi_spi_mode = 1; /* we have a device to talk too */
@@ -510,7 +509,6 @@ static int bcm2708_spi_transfer(struct spi_device *spi, struct spi_message *msg)
     int ret;
     unsigned long flags;
 
-//    dev_info(&spi->dev, "spi_transfer start %lu\n", comedi_count++);
     if (unlikely(list_empty(&msg->transfers)))
         return -EINVAL;
 
@@ -543,7 +541,6 @@ static int bcm2708_spi_transfer(struct spi_device *spi, struct spi_message *msg)
     queue_work(bs->workq, &bs->work);
     spin_unlock_irqrestore(&bs->lock, flags);
 
-//    dev_info(&spi->dev, "spi_transfer stop \n");
     return 0;
 }
 
@@ -636,8 +633,9 @@ static int __devinit bcm2708_spi_probe(struct platform_device *pdev) {
         goto out_free_irq;
     }
 
+    /* make comedi copies */
     comedi_bs = bs;
-    comedi_master = master;
+    //    comedi_master = master;
     dev_info(&pdev->dev, "SPI Controller at 0x%08lx (irq %d)\n",
             (unsigned long) regs->start, irq);
 
@@ -1101,7 +1099,9 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
     return insn->n;
 }
 
+/* Create a message to send to the SPI driver */
 static void comedi_spi_msg(unsigned char data) {
+
     spi_message_init(&comedi_ctl.msg);
     comedi_ctl.msg.spi = comedi_spi;
     comedi_ctl.tx_buff[0] = data;
@@ -1111,6 +1111,7 @@ static void comedi_spi_msg(unsigned char data) {
     spi_message_add_tail(&comedi_ctl.transfer, &comedi_ctl.msg);
 }
 
+/* Have the SPI driver execute our message */
 static int comedi_do_one_message(unsigned char msgdata) {
     int status;
 
@@ -1119,6 +1120,7 @@ static int comedi_do_one_message(unsigned char msgdata) {
     return status;
 }
 
+/* Talk to the ADC via the SPI */
 static int daqgert_ai_rinsn(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
@@ -1130,7 +1132,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
         comedi_do_one_message(CMD_ADC_GO_H + chan);
-        udelay(150);
+        udelay(100);
         comedi_do_one_message(CMD_ADC_DATA);
         data[n] = comedi_ctl.rx_buff[0] << 8;
         comedi_do_one_message(CMD_DUMMY_CFG);
@@ -1202,9 +1204,19 @@ static int bcm2708_check_pinmode(void) {
 
 static int daqgert_ai_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
-    /* SPI data transfers */
 
-    return NUM_AI_CHAN;
+    int spi_adc_chan;
+
+    /* SPI data transfers, send a few dummys for config info */
+    comedi_do_one_message(CMD_DUMMY_CFG);
+    comedi_do_one_message(CMD_DUMMY_CFG);
+    comedi_do_one_message(CMD_DUMMY_CFG);
+    if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
+        return 1; /* dummy chan */
+    }
+    spi_adc_chan = comedi_ctl.rx_buff[0]&0x0f;
+    dev_info(dev->class_dev, "PIC ADC board Board Detected, %i channels\n", spi_adc_chan);
+    return spi_adc_chan;
 }
 
 static int daqgert_ao_config(struct comedi_device *dev,
