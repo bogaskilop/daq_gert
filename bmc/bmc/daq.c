@@ -61,7 +61,7 @@ int init_daq(double min_range, double max_range, int range_update) {
         ad_range->min = min_range;
         ad_range->max = max_range;
     }
-    printf(": ad_range .min = %.1f, max = %.1f\n", ad_range->min,
+    printf(": ad_range .min = %.3f, max = %.3f\n", ad_range->min,
             ad_range->max);
 
     printf("Subdev AO  %i ", subdev_ao);

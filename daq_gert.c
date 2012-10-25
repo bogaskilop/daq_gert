@@ -121,9 +121,21 @@ channel numbers [0..7] will be outputs, [8..16/20] will be inputs
 Digital direction configuration: [0..1] are input only due to pullups,
  * all other ports can be input or outputs
 
-Analog: The input  range is 0 to 1023 for 0.0 to 5.0 volts 
+Analog: The input  range is 0 to 1023 for 0.0 to 3.3 or 2.048 volts 
 IRQ is assigned but not used.
 
+ *  PIC Slave Info:
+ * 
+ * bit 7 high for commands sent from the MASTER
+ * bit 6 0 send lower or 1 send upper byte ADC result first
+ * bits 3..0 port address
+ *
+ * bit 7 low  for config data sent in CMD_DUMMY per uC type
+ * bits 6 config bit code always 1
+ * bit	5 0=ADC ref VDD, 1=ADC rec FVR=2.048
+ * bit  4 0=10bit adc, 1=12bit adc
+ * bits 3..0 number of ADC channels
+ * 
  */
 
 #include "../comedidev.h"
@@ -494,8 +506,7 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
         spi->controller_state = NULL;
     }
 
-    dev_info(&spi->dev,
-            //	dev_dbg(&spi->dev,
+    dev_dbg(&spi->dev,
             "setup: cd %d: %d Hz, bpw %u, mode 0x%x -> CS=%08x CDIV=%04x\n",
             spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
             spi->mode, state->cs, state->cdiv);
@@ -635,7 +646,6 @@ static int __devinit bcm2708_spi_probe(struct platform_device *pdev) {
 
     /* make comedi copies */
     comedi_bs = bs;
-    //    comedi_master = master;
     dev_info(&pdev->dev, "SPI Controller at 0x%08lx (irq %d)\n",
             (unsigned long) regs->start, irq);
 
@@ -777,10 +787,15 @@ static unsigned int RPisys_rev;
 /* The SPI code has found the IO chips or not  */
 static int gert_detected = FALSE;
 /* default to TRUE in detection code while testing */
+static int spi_adc_chan, spi_adc_range;
 
-static const struct comedi_lrange daqgert_ai_range = {1,
+static const struct comedi_lrange daqgert_ai_range3_300 = {1,
     {
-        RANGE(0, 3.3),
+        RANGE(0, 3.300),
+    }};
+static const struct comedi_lrange daqgert_ai_range2_048 = {1,
+    {
+        RANGE(0, 2.048),
     }};
 
 static const struct comedi_lrange daqgert_ao_range = {1,
@@ -1205,7 +1220,6 @@ static int bcm2708_check_pinmode(void) {
 static int daqgert_ai_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
 
-    int spi_adc_chan;
 
     /* SPI data transfers, send a few dummys for config info */
     comedi_do_one_message(CMD_DUMMY_CFG);
@@ -1215,7 +1229,10 @@ static int daqgert_ai_config(struct comedi_device *dev,
         return 1; /* dummy chan */
     }
     spi_adc_chan = comedi_ctl.rx_buff[0]&0x0f;
-    dev_info(dev->class_dev, "PIC spi slave ADC board Board Detected, %i channels\n", spi_adc_chan);
+    spi_adc_range = comedi_ctl.rx_buff[0]&0b00100000;
+    dev_info(dev->class_dev,
+            "PIC spi slave ADC board Board Detected, %i Channels, Range code %i\n",
+            spi_adc_chan, spi_adc_range);
     return spi_adc_chan;
 }
 
@@ -1299,7 +1316,11 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->n_chan = num_ai_chan;
         s->len_chanlist = num_ai_chan;
         s->maxdata = (1 << 10) - 1;
-        s->range_table = &daqgert_ai_range;
+        if (spi_adc_range) {
+            s->range_table = &daqgert_ai_range2_048;
+        } else {
+            s->range_table = &daqgert_ai_range3_300;
+        }
         s->insn_read = daqgert_ai_rinsn;
 
         /* daq-gert ao */
