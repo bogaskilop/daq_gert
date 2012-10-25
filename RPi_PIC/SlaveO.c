@@ -4,13 +4,17 @@
  * examples
  *
  * Fully interrupt drived SPI slave ADC for RPi via the daq_gert linux module
+ * 8722
  * Port E is the main led diag port
  * PORT H is the LCD port
+ * 25k22
+ * Pins C0,C1 are the diag LED pins.
  * SPI 2 has been config'd as the slave with chip select.
  * The I/O and clock pins
  * have been interconnected in the standard way for a PIC18F8722 chip
  *
- * Version	0.04 The testing hardware is mainly a pic18f8722 with a
+ * Version	0.05 Fixed the P25K22 version to work correctly.
+ *		0.04 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
  *		The target hardware for field use will be the pic18f25k22
  *		due to its 28 pin dip format, BUT is not currenetly being
@@ -38,7 +42,7 @@
 
 #ifdef P25K22
 #include <p18f25k22.h>
-#pragma	config	FOSC = INTIO7
+#pragma	config	FOSC = INTIO67
 #pragma config	PLLCFG=ON
 #pragma config	WDTEN = ON, WDTPS = 1024
 #pragma config	CCP2MX = PORTC1, PBADEN = OFF, T3CMX = PORTC0
@@ -212,7 +216,6 @@ void InterruptHandlerHigh(void)
 	timer.lt = TIMEROFFSET; // Copy timer value into union
 	TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
 	TMR0L = timer.bt[LOW]; // Write low byte to Timer0
-	DLED0 = !DLED0;
 	/* if we are just idle don't reset the PIC */
 	if ((slave_int_count - last_slave_int_count) < SLAVE_ACTIVE) {
 	    ClrWdt(); // reset the WDT timer
@@ -419,6 +422,8 @@ void config_pic(void)
     ADCON1 = 0x03; // adc [0..11] enable
 #endif
 #ifdef P25K22
+    OSCCON = 0x72; // internal osc
+    OSCTUNE = 0xC0;
     TRISC = 0b11111100; // [0..1] outputs for DIAG leds [2..7] for analog
     LATC = 0x00; // all LEDS on
     TRISAbits.TRISA6 = 0; // CPU clock out
