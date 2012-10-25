@@ -72,6 +72,7 @@ int init_daq(double min_range, double max_range, int range_update) {
     ranges_ao = comedi_get_n_ranges(it, subdev_ao, i);
     printf("Ranges %i \n", ranges_ao);
     ADC_OPEN = TRUE;
+    comedi_set_global_oor_behavior(COMEDI_OOR_NUMBER);
     return 0;
 }
 
