@@ -1232,8 +1232,8 @@ static int daqgert_ai_config(struct comedi_device *dev,
     spi_adc_range = comedi_ctl.rx_buff[0]&0b00100000;
     spi_adc_bits = comedi_ctl.rx_buff[0]&0b00010000;
     dev_info(dev->class_dev,
-            "PIC spi slave ADC board Board Detected, %i Channels, Range code %i\n",
-            spi_adc_chan, spi_adc_range);
+            "PIC spi slave ADC board Board Detected, %i Channels, Range code %i, Bits code %i\n",
+            spi_adc_chan, spi_adc_range,spi_adc_bits);
     return spi_adc_chan;
 }
 
