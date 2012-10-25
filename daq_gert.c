@@ -1262,7 +1262,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     /* These are GPIO pin numbers NOT WPi pin numbers */
     bcm2708_check_pinmode(); /* looking for a GERT Board */
     if (gert_detected) {
-        dev_info(dev->class_dev, "Gert Board Detected\n");
+        dev_info(dev->class_dev, "Gert Board Detected (FAKE)\n");
         num_subdev = 3;
     } else {
         dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only.\n");
