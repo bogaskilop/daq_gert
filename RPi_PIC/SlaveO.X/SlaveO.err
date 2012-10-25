@@ -1,0 +1,4 @@
+Error[1224] ../SlaveO.c 41 : configuration setting 'FOSC' not recognized
+Error[1224] ../SlaveO.c 42 : configuration setting 'PLLCFG' not recognized
+Error[1224] ../SlaveO.c 43 : configuration setting 'WDTEN' not recognized
+Error[1225] ../SlaveO.c 44 : configuration value 'PORTC1' not recognized for configuration setting 'CCP2MX'

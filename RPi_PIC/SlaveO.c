@@ -23,8 +23,8 @@
  * nsaspook@nsaspook.com    Oct 2012
  */
 
-//#define P25K22
-#define P8722
+#define P25K22
+//#define P8722
 
 #ifdef P8722
 #include "xlcd.h"
@@ -212,6 +212,7 @@ void InterruptHandlerHigh(void)
 	timer.lt = TIMEROFFSET; // Copy timer value into union
 	TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
 	TMR0L = timer.bt[LOW]; // Write low byte to Timer0
+	DLED0 = !DLED0;
 	/* if we are just idle don't reset the PIC */
 	if ((slave_int_count - last_slave_int_count) < SLAVE_ACTIVE) {
 	    ClrWdt(); // reset the WDT timer
@@ -419,7 +420,7 @@ void config_pic(void)
 #endif
 #ifdef P25K22
     TRISC = 0b11111100; // [0..1] outputs for DIAG leds [2..7] for analog
-    LATC = 0x03; // all LEDS off
+    LATC = 0x00; // all LEDS on
     TRISAbits.TRISA6 = 0; // CPU clock out
 
     TRISBbits.TRISB1 = 1; // SSP2 pins clk in SLAVE
@@ -485,9 +486,18 @@ void config_pic(void)
     PIR3bits.SSP2IF = LOW;
     PIE3bits.SSP2IE = HIGH;
 
+#ifdef P8722
     /* Enable global interrupts */
     INTCONbits.PEIE = HIGH;
     INTCONbits.GIE = HIGH;
+#endif
+#ifdef P25K22
+    /* Enable interrupt priority */
+    RCONbits.IPEN = 1;
+    /* Enable all high priority interrupts */
+    INTCONbits.GIEH = 1;
+#endif
+
     /* clear any SSP error bits */
     SSP2CON1bits.WCOL = SSP2CON1bits.SSPOV = LOW;
 
