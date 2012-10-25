@@ -377,8 +377,8 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
     int ret;
     u32 cs;
 
-    dev_info(&spi->dev, "spi_transfer_process start %lu\n", comedi_count++);
-    dev_info(&spi->dev, "spi_transfer_process data cmd tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
+//    dev_info(&spi->dev, "spi_transfer_process start %lu\n", comedi_count++);
+//    dev_info(&spi->dev, "spi_transfer_process data cmd tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
     if (bs->stopping)
         return -ESHUTDOWN;
 
@@ -422,7 +422,7 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
 
     msg->actual_length += (xfer->len - bs->len);
 
-    dev_info(&spi->dev, "spi_transfer_process stop data result tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
+//    dev_info(&spi->dev, "spi_transfer_process stop data result tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
     return 0;
 }
 
@@ -433,7 +433,7 @@ static void bcm2708_work(struct work_struct *work) {
     struct spi_transfer *xfer;
     int status = 0;
 
-    dev_info(&comedi_spi->dev, "bcm2708_work start %lu\n", comedi_count++);
+//    dev_info(&comedi_spi->dev, "bcm2708_work start %lu\n", comedi_count++);
     spin_lock_irqsave(&bs->lock, flags);
     while (!list_empty(&bs->queue)) {
         msg = list_first_entry(&bs->queue, struct spi_message, queue);
@@ -452,7 +452,7 @@ static void bcm2708_work(struct work_struct *work) {
         spin_lock_irqsave(&bs->lock, flags);
     }
     spin_unlock_irqrestore(&bs->lock, flags);
-    dev_info(&comedi_spi->dev, "bcm2708_work stop \n");
+//    dev_info(&comedi_spi->dev, "bcm2708_work stop \n");
 }
 
 static int bcm2708_spi_setup(struct spi_device *spi) {
@@ -510,7 +510,7 @@ static int bcm2708_spi_transfer(struct spi_device *spi, struct spi_message *msg)
     int ret;
     unsigned long flags;
 
-    dev_info(&spi->dev, "spi_transfer start %lu\n", comedi_count++);
+//    dev_info(&spi->dev, "spi_transfer start %lu\n", comedi_count++);
     if (unlikely(list_empty(&msg->transfers)))
         return -EINVAL;
 
@@ -543,7 +543,7 @@ static int bcm2708_spi_transfer(struct spi_device *spi, struct spi_message *msg)
     queue_work(bs->workq, &bs->work);
     spin_unlock_irqrestore(&bs->lock, flags);
 
-    dev_info(&spi->dev, "spi_transfer stop \n");
+//    dev_info(&spi->dev, "spi_transfer stop \n");
     return 0;
 }
 
