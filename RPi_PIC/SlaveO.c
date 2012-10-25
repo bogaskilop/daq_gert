@@ -23,8 +23,8 @@
  * nsaspook@nsaspook.com    Oct 2012
  */
 
-#define P25K22
-//#define P8722
+//#define P25K22
+#define P8722
 
 #ifdef P8722
 #include "xlcd.h"
