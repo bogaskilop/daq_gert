@@ -464,7 +464,7 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
         comedi_spi_mode = 1; /* we have a device to talk too */
         comedi_spi = spi; /* get a copy of the slave device */
-        comedi_ctl.msg.spi=comedi_spi;
+        comedi_ctl.msg.spi = comedi_spi;
     }
 
     if (bs->stopping)
@@ -636,8 +636,8 @@ static int __devinit bcm2708_spi_probe(struct platform_device *pdev) {
         goto out_free_irq;
     }
 
-    comedi_bs=bs;
-    comedi_master=master;
+    comedi_bs = bs;
+    comedi_master = master;
     dev_info(&pdev->dev, "SPI Controller at 0x%08lx (irq %d)\n",
             (unsigned long) regs->start, irq);
 
@@ -1103,6 +1103,7 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
 
 static void comedi_spi_msg(unsigned char data) {
     spi_message_init(&comedi_ctl.msg);
+    comedi_ctl.msg.spi = comedi_spi;
     comedi_ctl.tx_buff[0] = data;
     comedi_ctl.transfer.len = 1;
     comedi_ctl.transfer.tx_buf = comedi_ctl.tx_buff;
