@@ -1215,7 +1215,7 @@ static int daqgert_ai_config(struct comedi_device *dev,
         return 1; /* dummy chan */
     }
     spi_adc_chan = comedi_ctl.rx_buff[0]&0x0f;
-    dev_info(dev->class_dev, "PIC ADC board Board Detected, %i channels\n", spi_adc_chan);
+    dev_info(dev->class_dev, "PIC spi slave ADC board Board Detected, %i channels\n", spi_adc_chan);
     return spi_adc_chan;
 }
 
