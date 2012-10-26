@@ -1147,7 +1147,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
         comedi_do_one_message(CMD_ADC_GO_H + chan);
-        udelay(100);
+        udelay(50);     /* ADC conversion delay */
         comedi_do_one_message(CMD_ADC_DATA);
         data[n] = comedi_ctl.rx_buff[0] << 8;
         comedi_do_one_message(CMD_DUMMY_CFG);
