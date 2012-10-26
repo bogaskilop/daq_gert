@@ -13,7 +13,9 @@
  * The I/O and clock pins
  * have been interconnected in the standard way for a PIC18F8722 chip
  *
- * Version	0.05 Fixed the P25K22 version to work correctly.
+ * Version	0.06 P25K22 Set PIC speed to 64mhz and use have ADC use FOSC_64,12_TAD
+ *		     P8722 have ADC usr FOSC_32,12_TAD
+ *		0.05 Fixed the P25K22 version to work correctly.
  *		0.04 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
  *		The target hardware for field use will be the pic18f25k22
@@ -422,8 +424,8 @@ void config_pic(void)
     ADCON1 = 0x03; // adc [0..11] enable
 #endif
 #ifdef P25K22
-    OSCCON = 0x72; // internal osc
-    OSCTUNE = 0xC0;
+    OSCCON = 0x70; // internal osc 16mhz, CONFIG OPTION 4XPLL for 64MHZ
+    OSCTUNE = 0xC0; // 4x pll
     TRISC = 0b11111100; // [0..1] outputs for DIAG leds [2..7] for analog
     LATC = 0x00; // all LEDS on
     TRISAbits.TRISA6 = 0; // CPU clock out
@@ -458,7 +460,7 @@ void config_pic(void)
     ANSELB = 0b00110000; // analog bit enables
     ANSELC = 0b11111100; // analog bit enables
     VREFCON0 = 0b11100000; // ADC voltage ref 2.048 volts
-    OpenADC(ADC_FOSC_RC & ADC_RIGHT_JUST & ADC_20_TAD, ADC_CH0 & ADC_INT_ON, ADC_REF_FVR_BUF & ADC_REF_VDD_VSS); // open ADC channel
+    OpenADC(ADC_FOSC_64 & ADC_RIGHT_JUST & ADC_12_TAD, ADC_CH0 & ADC_INT_ON, ADC_REF_FVR_BUF & ADC_REF_VDD_VSS); // open ADC channel
 #endif
 
 #ifdef P8722
@@ -474,7 +476,7 @@ void config_pic(void)
     TRISFbits.TRISF4 = HIGH; // an9
     TRISFbits.TRISF5 = HIGH; // an10
     TRISFbits.TRISF6 = HIGH; // an11
-    OpenADC(ADC_FOSC_RC & ADC_RIGHT_JUST & ADC_20_TAD, ADC_CH0 & ADC_REF_VDD_VSS & ADC_INT_ON, ADC_12ANA); // open ADC channel
+    OpenADC(ADC_FOSC_32 & ADC_RIGHT_JUST & ADC_12_TAD, ADC_CH0 & ADC_REF_VDD_VSS & ADC_INT_ON, ADC_12ANA); // open ADC channel
 #endif
 
     PIE1bits.ADIE = HIGH; // the ADC interrupt enable bit
