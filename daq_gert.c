@@ -786,8 +786,17 @@ extern unsigned int system_serial_high;
 static unsigned int RPisys_rev;
 /* The SPI code has found the IO chips or not  */
 static int gert_detected = FALSE;
+
 /* default to TRUE in detection code while testing */
-static int spi_adc_chan, spi_adc_range, spi_adc_bits;
+struct spi_adc_type {
+    uint16_t range : 1;
+    uint16_t bits : 1;
+    uint16_t udef1 : 1;
+    uint16_t udef2 : 1;
+    uint16_t chan : 4;
+};
+struct spi_adc_type spi_adc;
+//static int spi_adc_chan, spi_adc_range, spi_adc_bits;
 
 static const struct comedi_lrange daqgert_ai_range3_300 = {1,
     {
@@ -1147,7 +1156,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
         comedi_do_one_message(CMD_ADC_GO_H + chan);
-        udelay(50);     /* ADC conversion delay */
+        udelay(50); /* ADC conversion delay */
         comedi_do_one_message(CMD_ADC_DATA);
         data[n] = comedi_ctl.rx_buff[0] << 8;
         comedi_do_one_message(CMD_DUMMY_CFG);
@@ -1228,13 +1237,13 @@ static int daqgert_ai_config(struct comedi_device *dev,
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
         return 1; /* dummy chan */
     }
-    spi_adc_chan = comedi_ctl.rx_buff[0]&0x0f;
-    spi_adc_range = comedi_ctl.rx_buff[0]&0b00100000;
-    spi_adc_bits = comedi_ctl.rx_buff[0]&0b00010000;
+    spi_adc.chan = comedi_ctl.rx_buff[0]&0x0f;
+    spi_adc.range = (comedi_ctl.rx_buff[0]&0b00100000) >> 5;
+    spi_adc.bits = (comedi_ctl.rx_buff[0]&0b00010000) >> 4;
     dev_info(dev->class_dev,
             "PIC spi slave ADC board Board Detected, %i Channels, Range code %i, Bits code %i\n",
-            spi_adc_chan, spi_adc_range,spi_adc_bits);
-    return spi_adc_chan;
+            spi_adc.chan, spi_adc.range, spi_adc.bits);
+    return spi_adc.chan;
 }
 
 static int daqgert_ao_config(struct comedi_device *dev,
@@ -1316,12 +1325,12 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->subdev_flags = SDF_READABLE | SDF_GROUND;
         s->n_chan = num_ai_chan;
         s->len_chanlist = num_ai_chan;
-        if (spi_adc_bits) {
+        if (spi_adc.bits) {
             s->maxdata = (1 << 12) - 1;
         } else {
             s->maxdata = (1 << 10) - 1;
         }
-        if (spi_adc_range) {
+        if (spi_adc.range) {
             s->range_table = &daqgert_ai_range2_048;
         } else {
             s->range_table = &daqgert_ai_range3_300;
