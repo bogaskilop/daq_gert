@@ -179,6 +179,15 @@ struct comedi_control {
 };
 static struct comedi_control comedi_ctl;
 
+struct spi_adc_type {
+    uint16_t range : 1;
+    uint16_t bits : 1;
+    uint16_t link : 1;
+    uint16_t pic18 : 1;
+    uint16_t chan : 4;
+};
+struct spi_adc_type spi_adc;
+
 #define SPI_BUFF_SIZE 16
 
 #define CMD_ADC_GO	0b10000000      // send data low byte first
@@ -389,8 +398,6 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
     int ret;
     u32 cs;
 
-    //    dev_info(&spi->dev, "spi_transfer_process start %lu\n", comedi_count++);
-    //    dev_info(&spi->dev, "spi_transfer_process data cmd tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
     if (bs->stopping)
         return -ESHUTDOWN;
 
@@ -646,9 +653,10 @@ static int __devinit bcm2708_spi_probe(struct platform_device *pdev) {
 
     /* make comedi copies */
     comedi_bs = bs;
+
     dev_info(&pdev->dev, "SPI Controller at 0x%08lx (irq %d)\n",
             (unsigned long) regs->start, irq);
-
+    spi_adc.link = 1;
     return 0;
 
 out_free_irq:
@@ -668,6 +676,7 @@ static int __devexit bcm2708_spi_remove(struct platform_device *pdev) {
     struct spi_master *master = platform_get_drvdata(pdev);
     struct bcm2708_spi *bs = spi_master_get_devdata(master);
 
+    spi_adc.link = 0;
     /* reset the hardware and block queue progress */
     spin_lock_irq(&bs->lock);
     bs->stopping = true;
@@ -786,17 +795,7 @@ extern unsigned int system_serial_high;
 static unsigned int RPisys_rev;
 /* The SPI code has found the IO chips or not  */
 static int gert_detected = FALSE;
-
 /* default to TRUE in detection code while testing */
-struct spi_adc_type {
-    uint16_t range : 1;
-    uint16_t bits : 1;
-    uint16_t udef1 : 1;
-    uint16_t udef2 : 1;
-    uint16_t chan : 4;
-};
-struct spi_adc_type spi_adc;
-//static int spi_adc_chan, spi_adc_range, spi_adc_bits;
 
 static const struct comedi_lrange daqgert_ai_range3_300 = {1,
     {
@@ -1139,6 +1138,7 @@ static void comedi_spi_msg(unsigned char data) {
 static int comedi_do_one_message(unsigned char msgdata) {
     int status;
 
+    if (!spi_adc.link) return -ESHUTDOWN;
     comedi_spi_msg(msgdata);
     status = bcm2708_process_transfer(comedi_bs, &comedi_ctl.msg, &comedi_ctl.transfer);
     return status;
@@ -1235,14 +1235,16 @@ static int daqgert_ai_config(struct comedi_device *dev,
     comedi_do_one_message(CMD_DUMMY_CFG);
     comedi_do_one_message(CMD_DUMMY_CFG);
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
+        spi_adc.pic18 = 0;
         return 1; /* dummy chan */
     }
+    spi_adc.pic18 = 1;
     spi_adc.chan = comedi_ctl.rx_buff[0]&0x0f;
     spi_adc.range = (comedi_ctl.rx_buff[0]&0b00100000) >> 5;
     spi_adc.bits = (comedi_ctl.rx_buff[0]&0b00010000) >> 4;
     dev_info(dev->class_dev,
-            "PIC spi slave ADC board Board Detected, %i Channels, Range code %i, Bits code %i\n",
-            spi_adc.chan, spi_adc.range, spi_adc.bits);
+            "PIC spi slave ADC board Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i\n",
+            spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18);
     return spi_adc.chan;
 }
 
