@@ -166,9 +166,7 @@ void (*setPadDrive) (int group, int value);
 int (*digitalRead) (int pin);
 
 static unsigned char comedi_spi_mode = 0;
-// static unsigned long comedi_count = 0;
 static struct spi_device *comedi_spi;
-//static struct spi_master *comedi_master;
 static struct bcm2708_spi *comedi_bs;
 
 struct comedi_control {
@@ -183,7 +181,7 @@ struct spi_adc_type {
     uint16_t range : 1;
     uint16_t bits : 1;
     uint16_t link : 1;
-    uint16_t pic18 : 1;
+    uint16_t pic18 : 2;
     uint16_t chan : 4;
 };
 struct spi_adc_type spi_adc;
@@ -820,10 +818,10 @@ static const struct comedi_lrange daqgert_ao_range = {1,
       Take a Wiring pin (0 through X) and re-map it to the BCM_GPIO pin
       Cope for 2 different board revisions here
  */
-static int *pinToGpio;
+static const int *pinToGpio;
 
 /* From the Original Wiki - GPIO 0 through 7 */
-static int pinToGpioR1 [64] = {
+static const int pinToGpioR1 [64] = {
     17, 18, 21, 22, 23, 24, 25, 4,
     0, 1, /* I2C  - SDA0, SCL0            wpi  8 -  9 */
     8, 7, /* SPI  - CE1, CE0              wpi 10 - 11 */
@@ -838,7 +836,7 @@ static int pinToGpioR1 [64] = {
 };
 
 /* From the Original Wiki - GPIO 0 through 7:   wpi  0 -  7 */
-static int pinToGpioR2 [64] = {
+static const int pinToGpioR2 [64] = {
     17, 18, 27, 22, 23, 24, 25, 4,
     2, 3, /* I2C  - SDA0, SCL0            wpi  8 -  9 */
     8, 7, /* SPI  - CE1, CE0              wpi 10 - 11 */
@@ -857,7 +855,7 @@ static int pinToGpioR2 [64] = {
  gpioToGPFSEL:
       Map a BCM_GPIO pin to it's control port. (GPFSEL 0-5)
  */
-static uint8_t gpioToGPFSEL [] = {
+static const uint8_t gpioToGPFSEL [] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
@@ -870,7 +868,7 @@ static uint8_t gpioToGPFSEL [] = {
  gpioToShift
       Define the shift up for the 3 bits per pin in each GPFSEL port
  */
-static uint8_t gpioToShift [] = {
+static const uint8_t gpioToShift [] = {
     0, 3, 6, 9, 12, 15, 18, 21, 24, 27,
     0, 3, 6, 9, 12, 15, 18, 21, 24, 27,
     0, 3, 6, 9, 12, 15, 18, 21, 24, 27,
@@ -882,7 +880,7 @@ static uint8_t gpioToShift [] = {
  gpioToGPSET:
       (Word) offset to the GPIO Set registers for each GPIO pin
  */
-static uint8_t gpioToGPSET [] = {
+static const uint8_t gpioToGPSET [] = {
     7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
     7, 7, 7, 7, 7, 7, 7, 7,
     8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
@@ -893,7 +891,7 @@ static uint8_t gpioToGPSET [] = {
  gpioToGPCLR:
       (Word) offset to the GPIO Clear registers for each GPIO pin
  */
-static uint8_t gpioToGPCLR [] = {
+static const uint8_t gpioToGPCLR [] = {
     10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
     10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
     11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
@@ -904,7 +902,7 @@ static uint8_t gpioToGPCLR [] = {
  gpioToGPLEV:
       (Word) offset to the GPIO Input level registers for each GPIO pin
  */
-static uint8_t gpioToGPLEV [] = {
+static const uint8_t gpioToGPLEV [] = {
     13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
     13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
     14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14,
@@ -1156,7 +1154,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
         comedi_do_one_message(CMD_ADC_GO_H + chan);
-        udelay(50); /* ADC conversion delay */
+        udelay(35); /* ADC conversion delay */
         comedi_do_one_message(CMD_ADC_DATA);
         data[n] = comedi_ctl.rx_buff[0] << 8;
         comedi_do_one_message(CMD_DUMMY_CFG);
@@ -1236,9 +1234,10 @@ static int daqgert_ai_config(struct comedi_device *dev,
     comedi_do_one_message(CMD_DUMMY_CFG);
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
         spi_adc.pic18 = 0;
+        /* look for the gertboard SPI devices .pic18 code 1 */
         return 1; /* dummy chan */
     }
-    spi_adc.pic18 = 1;
+    spi_adc.pic18 = 2;
     spi_adc.chan = comedi_ctl.rx_buff[0]&0x0f;
     spi_adc.range = (comedi_ctl.rx_buff[0]&0b00100000) >> 5;
     spi_adc.bits = (comedi_ctl.rx_buff[0]&0b00010000) >> 4;

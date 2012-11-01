@@ -21,6 +21,7 @@ if there is try just copying the daq_gert.ko module first.
 Copy the daq_gert.ko and comedi.ko modules to the /lib/modules/3.2.27+/kernel/drivers/staging/comedi/drivers/
 directory. You may have to create the comedi/drivers/ directories.
 cp daq_gert.ko comedi.ko /lib/modules/3.2.27+/kernel/drivers/staging/comedi/drivers/
+depmod -v
 
 Copy the comedi.conf file to /etc/modprobe.d/: cp comedi.conf /etc/modprobe.d/
 This will create the /dev/comedi[0..3] device files when the comedi module is loaded
