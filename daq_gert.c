@@ -186,6 +186,14 @@ struct spi_adc_type {
 };
 struct spi_adc_type spi_adc;
 
+struct pic_platform_data {
+    uint16_t conv_delay_usecs;
+};
+
+static struct pic_platform_data pic_info_pic18 = {
+    .conv_delay_usecs = 35
+};
+
 #define SPI_BUFF_SIZE 16
 
 #define CMD_ADC_GO	0b10000000      // send data low byte first
@@ -438,8 +446,6 @@ static int bcm2708_process_transfer(struct bcm2708_spi *bs,
     }
 
     msg->actual_length += (xfer->len - bs->len);
-
-    //    dev_info(&spi->dev, "spi_transfer_process stop data result tx %x, rx %x\n", ((char*) xfer->tx_buf)[0], ((char*) xfer->rx_buf)[0]);
     return 0;
 }
 
@@ -1148,13 +1154,14 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
         struct comedi_insn *insn, unsigned int *data) {
 
     int n, chan;
+    struct pic_platform_data *pic_data = s->private;
 
     chan = CR_CHAN(insn->chanspec);
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
         comedi_do_one_message(CMD_ADC_GO_H + chan);
-        udelay(35); /* ADC conversion delay */
+        udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
         comedi_do_one_message(CMD_ADC_DATA);
         data[n] = comedi_ctl.rx_buff[0] << 8;
         comedi_do_one_message(CMD_DUMMY_CFG);
@@ -1320,6 +1327,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     if (num_subdev > 1) { /* we have the SPI ADC DAC on board */
         /* daq-gert ai */
         s = &dev->subdevices[1];
+        s->private = &pic_info_pic18; /* SPI adc slave conv delay */
         num_ai_chan = daqgert_ai_config(dev, s); /* config SPI ports for ai use */
         s->type = COMEDI_SUBD_AI;
         /* we support single-ended (ground)  */
