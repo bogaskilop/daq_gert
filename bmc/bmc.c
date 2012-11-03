@@ -18,7 +18,7 @@ struct bmcdata bmc; /* DIO buffer */
 
 int main(int argc, char *argv[]) {
     int blink[2], flip[2] = {0, 0};
-    if (init_daq(0.0, 0.0,0) < 0) {
+    if (init_daq(-25.0, 25.0,FALSE) < 0) {
         printf("Missing Analog subdevice(s)\n");
         return -1;
     }

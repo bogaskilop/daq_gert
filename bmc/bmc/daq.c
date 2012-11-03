@@ -21,7 +21,8 @@ int maxdata_dio, ranges_dio, channels_dio, datain_dio;
 
 comedi_t *it;
 comedi_range *ad_range;
-int8_t ADC_OPEN = FALSE, DIO_OPEN = FALSE, ADC_ERROR = FALSE, DEV_OPEN = FALSE, DIO_ERROR = FALSE;
+int8_t ADC_OPEN = FALSE, DIO_OPEN = FALSE, ADC_ERROR = FALSE, DEV_OPEN = FALSE,
+        DIO_ERROR = FALSE, HAS_AO = FALSE;
 
 int init_daq(double min_range, double max_range, int range_update) {
     int i = 0;
@@ -43,10 +44,12 @@ int init_daq(double min_range, double max_range, int range_update) {
         ADC_OPEN = FALSE;
     }
 
+
     subdev_ao = comedi_find_subdevice_by_type(it, COMEDI_SUBD_AO, subdev_ao);
     if (subdev_ao < 0) {
-        return -3;
-        ADC_OPEN = FALSE;
+        HAS_AO = FALSE;
+    } else {
+        HAS_AO = TRUE;
     }
 
     printf("Subdev AI  %i ", subdev_ai);
@@ -64,13 +67,16 @@ int init_daq(double min_range, double max_range, int range_update) {
     printf(": ad_range .min = %.3f, max = %.3f\n", ad_range->min,
             ad_range->max);
 
-    printf("Subdev AO  %i ", subdev_ao);
-    channels_ao = comedi_get_n_channels(it, subdev_ao);
-    printf("Analog  Channels %i ", channels_ao);
-    maxdata_ao = comedi_get_maxdata(it, subdev_ao, i);
-    printf("Maxdata %i ", maxdata_ao);
-    ranges_ao = comedi_get_n_ranges(it, subdev_ao, i);
-    printf("Ranges %i \n", ranges_ao);
+    if (HAS_AO) {
+        printf("Subdev AO  %i ", subdev_ao);
+        channels_ao = comedi_get_n_channels(it, subdev_ao);
+        printf("Analog  Channels %i ", channels_ao);
+        maxdata_ao = comedi_get_maxdata(it, subdev_ao, i);
+        printf("Maxdata %i ", maxdata_ao);
+        ranges_ao = comedi_get_n_ranges(it, subdev_ao, i);
+        printf("Ranges %i \n", ranges_ao);
+    }
+
     ADC_OPEN = TRUE;
     comedi_set_global_oor_behavior(COMEDI_OOR_NUMBER);
     return 0;
