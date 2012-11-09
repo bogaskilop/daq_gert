@@ -162,10 +162,7 @@ void (*pullUpDnControl) (int pin, int pud);
 void (*digitalWrite) (int pin, int value);
 void (*setPadDrive) (int group, int value);
 int (*digitalRead) (int pin);
-void (*setPadDrive) (int group, int value);
-int (*digitalRead) (int pin);
 
-static unsigned char comedi_spi_mode = 0;
 static struct spi_device *comedi_spi;
 static struct bcm2708_spi *comedi_bs;
 
@@ -482,9 +479,8 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
     int ret;
 
     /* Create SPI channel for Comedi */
-    if (!comedi_spi_mode) { /* we need a device to talk to */
+    if (!spi_adc.link) { /* we need a device to talk to */
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
-        comedi_spi_mode = 1; /* we have a device to talk too */
         comedi_spi = spi; /* get a copy of the slave device */
         comedi_ctl.msg.spi = comedi_spi;
     }
