@@ -1234,12 +1234,25 @@ static int bcm2708_check_pinmode(void) {
 static int daqgert_ai_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
 
-
     /* SPI data transfers, send a few dummys for config info */
     comedi_do_one_message(CMD_DUMMY_CFG, 0);
     comedi_do_one_message(CMD_DUMMY_CFG, 0);
     comedi_do_one_message(CMD_DUMMY_CFG, 0);
+    comedi_do_one_message(CMD_DUMMY_CFG, 0);
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
+        comedi_do_one_message(0b010000, 0);
+        if ((comedi_ctl.rx_buff[0]&0b00000100) == 0) {
+            spi_adc.pic18 = 0;
+            spi_adc.chan = 2;
+            spi_adc.range = 0; /* range 2.048 */
+            spi_adc.bits = 0; /* 10 bits */
+            dev_info(dev->class_dev,
+                    "Gertboard ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i\n",
+                    spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18);
+            comedi_do_one_message(0, 0); /* send dummy */
+            return spi_adc.chan;
+        }
+        comedi_do_one_message(0, 0); /* send dummy */
         spi_adc.pic18 = 0;
         /* look for the gertboard SPI devices .pic18 code 1 */
         return 1; /* dummy chan */
@@ -1249,7 +1262,7 @@ static int daqgert_ai_config(struct comedi_device *dev,
     spi_adc.range = (comedi_ctl.rx_buff[0]&0b00100000) >> 5;
     spi_adc.bits = (comedi_ctl.rx_buff[0]&0b00010000) >> 4;
     dev_info(dev->class_dev,
-            "PIC spi slave ADC board Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i\n",
+            "PIC spi slave ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i\n",
             spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18);
     return spi_adc.chan;
 }
