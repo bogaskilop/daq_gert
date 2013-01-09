@@ -19,6 +19,7 @@
  *     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
+#define EXTENDED_AI_CHAN        0
 
 /*
 Driver: "experimental" daq_gert in progress ...
@@ -181,7 +182,7 @@ struct spi_adc_type {
     uint16_t pic18 : 2;
     uint16_t chan : 4;
 };
-struct spi_adc_type spi_adc;
+struct spi_adc_type spi_adc, spi_dac;
 
 struct pic_platform_data {
     uint16_t conv_delay_usecs;
@@ -683,7 +684,7 @@ static int __devexit bcm2708_spi_remove(struct platform_device *pdev) {
     bcm2708_wr(bs, SPI_CS, SPI_CS_CLEAR_RX | SPI_CS_CLEAR_TX);
     spin_unlock_irq(&bs->lock);
 
-    flush_work_sync(&bs->work);
+    flush_work(&bs->work);
 
     clk_disable(bs->clk);
     clk_put(bs->clk);
@@ -779,8 +780,10 @@ MODULE_ALIAS("platform:" DRV_NAME);
 #define NUM_DIO_OUTPUTS 8
 /* for for compat with ni_daq_700 used for driver testing, 2 AI channels */
 /* on the real device */
-#define NUM_AI_CHAN 12
-#define NUM_AO_CHAN  2
+
+#define NUM_AI_CHAN_EXTENDED 12
+#define NUM_AI_CHAN 2
+#define NUM_AO_CHAN 2
 
 /* Locals to hold pointers to the hardware */
 
@@ -1123,9 +1126,10 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
 }
 
 /* Create a message to send to the SPI driver */
-static void comedi_spi_msg(unsigned char data) {
+static void comedi_spi_msg(unsigned char data, unsigned char cs_select) {
 
     spi_message_init(&comedi_ctl.msg);
+    comedi_spi->chip_select = cs_select;
     comedi_ctl.msg.spi = comedi_spi;
     comedi_ctl.tx_buff[0] = data;
     comedi_ctl.transfer.len = 1;
@@ -1134,12 +1138,12 @@ static void comedi_spi_msg(unsigned char data) {
     spi_message_add_tail(&comedi_ctl.transfer, &comedi_ctl.msg);
 }
 
-/* Have the SPI driver execute our message */
-static int comedi_do_one_message(unsigned char msgdata) {
+/* Have the SPI driver execute our message to the selected slave*/
+static int comedi_do_one_message(unsigned char msgdata, unsigned char cs_select) {
     int status;
 
     if (!spi_adc.link) return -ESHUTDOWN;
-    comedi_spi_msg(msgdata);
+    comedi_spi_msg(msgdata, cs_select);
     status = bcm2708_process_transfer(comedi_bs, &comedi_ctl.msg, &comedi_ctl.transfer);
     return status;
 }
@@ -1156,11 +1160,11 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
-        comedi_do_one_message(CMD_ADC_GO_H + chan);
+        comedi_do_one_message(CMD_ADC_GO_H + chan, 0);
         udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
-        comedi_do_one_message(CMD_ADC_DATA);
+        comedi_do_one_message(CMD_ADC_DATA, 0);
         data[n] = comedi_ctl.rx_buff[0] << 8;
-        comedi_do_one_message(CMD_DUMMY_CFG);
+        comedi_do_one_message(CMD_DUMMY_CFG, 0);
         data[n] += comedi_ctl.rx_buff[0];
     }
     return n;
@@ -1232,9 +1236,9 @@ static int daqgert_ai_config(struct comedi_device *dev,
 
 
     /* SPI data transfers, send a few dummys for config info */
-    comedi_do_one_message(CMD_DUMMY_CFG);
-    comedi_do_one_message(CMD_DUMMY_CFG);
-    comedi_do_one_message(CMD_DUMMY_CFG);
+    comedi_do_one_message(CMD_DUMMY_CFG, 0);
+    comedi_do_one_message(CMD_DUMMY_CFG, 0);
+    comedi_do_one_message(CMD_DUMMY_CFG, 0);
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
         spi_adc.pic18 = 0;
         /* look for the gertboard SPI devices .pic18 code 1 */

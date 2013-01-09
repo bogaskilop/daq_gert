@@ -14,7 +14,7 @@
  * have been interconnected in the standard way for a PIC18F8722 chip
  *
  * Version	0.06 P25K22 Set PIC speed to 64mhz and use have ADC use FOSC_64,12_TAD
- *		     P8722 have ADC usr FOSC_32,12_TAD
+ *		     P8722 have ADC use FOSC_32,12_TAD
  *		0.05 Fixed the P25K22 version to work correctly.
  *		0.04 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
