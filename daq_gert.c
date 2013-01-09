@@ -1160,12 +1160,20 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
-        comedi_do_one_message(CMD_ADC_GO_H + chan, 0);
-        udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
-        comedi_do_one_message(CMD_ADC_DATA, 0);
-        data[n] = comedi_ctl.rx_buff[0] << 8;
-        comedi_do_one_message(CMD_DUMMY_CFG, 0);
-        data[n] += comedi_ctl.rx_buff[0];
+        if (spi_adc.pic18 > 1) {
+            comedi_do_one_message(CMD_ADC_GO_H + chan, 0);
+            udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
+            comedi_do_one_message(CMD_ADC_DATA, 0);
+            data[n] = comedi_ctl.rx_buff[0] << 8;
+            comedi_do_one_message(CMD_DUMMY_CFG, 0);
+            data[n] += comedi_ctl.rx_buff[0];
+        } else {
+            comedi_do_one_message((0b010000 | ((chan & 0x01) << 3)), 0); /* set ADC channel */
+            data[n] = (comedi_ctl.rx_buff[0]&0b00000011) << 8;
+            comedi_do_one_message(0, 0);
+            data[n] += comedi_ctl.rx_buff[0];
+        }
+
     }
     return n;
 }
@@ -1216,7 +1224,7 @@ static int bcm2708_check_pinmode(void) {
     /* look for SPI offboard chip responses */
     /* Just set gert_detected for now */
     /* lets just say it works for now */
-    
+
     gert_detected = TRUE;
     return TRUE;
 }
@@ -1233,7 +1241,7 @@ static int daqgert_ai_config(struct comedi_device *dev,
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
         comedi_do_one_message(0b010000, 0);
         if ((comedi_ctl.rx_buff[0]&0b00000100) == 0) {
-            spi_adc.pic18 = 0;
+            spi_adc.pic18 = 1; /* MCP3002 mode */
             spi_adc.chan = 2;
             spi_adc.range = 0; /* range 2.048 */
             spi_adc.bits = 0; /* 10 bits */
@@ -1244,7 +1252,7 @@ static int daqgert_ai_config(struct comedi_device *dev,
             return spi_adc.chan;
         }
         comedi_do_one_message(0, 0); /* send dummy */
-        spi_adc.pic18 = 0;
+        spi_adc.pic18 = 0; /* SPI probes found nothing */
         /* look for the gertboard SPI devices .pic18 code 1 */
         dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only.\n");
         gert_detected = FALSE;
@@ -1253,10 +1261,13 @@ static int daqgert_ai_config(struct comedi_device *dev,
         }
         return 1; /* dummy chan */
     }
-    spi_adc.pic18 = 2;
+    spi_adc.pic18 = 2; /* PIC18 single-end mode 10 bits */
     spi_adc.chan = comedi_ctl.rx_buff[0]&0x0f;
     spi_adc.range = (comedi_ctl.rx_buff[0]&0b00100000) >> 5;
     spi_adc.bits = (comedi_ctl.rx_buff[0]&0b00010000) >> 4;
+    if (spi_adc.bits) {
+        spi_adc.pic18 = 3; /* PIC18 diff mode 12 bits */
+    }
     dev_info(dev->class_dev,
             "PIC spi slave ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i\n",
             spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18);
@@ -1306,7 +1317,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     /* These are GPIO pin numbers NOT WPi pin numbers */
     bcm2708_check_pinmode(); /* looking for a GERT Board */
     /* assume we have a gertboard */
-    dev_info(dev->class_dev, "Gert Board Detection Started\n");
+    dev_info(dev->class_dev, "GertBoard Detection Started\n");
     num_subdev = 3;
 
     /* Call SPI setup routines */
