@@ -21,6 +21,10 @@
  */
 #define EXTENDED_AI_CHAN        0
 
+#define CSnA    1       /* GPIO 8  Gertboard ADC */
+#define CSnB    0       /* GPIO 7  Gertboard DAC */
+
+
 /*
 Driver: "experimental" daq_gert in progress ...
  * 
@@ -164,7 +168,7 @@ void (*digitalWrite) (int pin, int value);
 void (*setPadDrive) (int group, int value);
 int (*digitalRead) (int pin);
 
-static struct spi_device *comedi_spi;
+static struct spi_device *comedi_spi_ai, *comedi_spi_ao;
 static struct bcm2708_spi *comedi_bs;
 
 struct comedi_control {
@@ -479,11 +483,16 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
     struct bcm2708_spi_state *state;
     int ret;
 
-    /* Create SPI channel for Comedi */
-    if (!spi_adc.link) { /* we need a device to talk to */
+    /* Create SPI channels for Comedi*/
+    if (spi->chip_select == CSnA) { /* we need a device to talk to the ADC */
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
-        comedi_spi = spi; /* get a copy of the slave device */
-        comedi_ctl.msg.spi = comedi_spi;
+        comedi_spi_ai = spi; /* get a copy of the slave device */
+        //        comedi_ctl.msg.spi = comedi_spi_ai;
+    }
+    if (spi->chip_select == CSnB) { /* we need a device to talk to the DAC */
+        spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
+        comedi_spi_ao = spi; /* get a copy of the slave device */
+        //        comedi_ctl.msg.spi = comedi_spi_ao;
     }
 
     if (bs->stopping)
@@ -513,6 +522,11 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
         kfree(state);
         spi->controller_state = NULL;
     }
+
+    dev_info(&spi->dev,
+            "setup: cd %d: %d Hz, bpw %u, mode 0x%x -> CS=%08x CDIV=%04x\n",
+            spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
+            spi->mode, state->cs, state->cdiv);
 
     dev_dbg(&spi->dev,
             "setup: cd %d: %d Hz, bpw %u, mode 0x%x -> CS=%08x CDIV=%04x\n",
@@ -1129,8 +1143,8 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
 static void comedi_spi_msg(unsigned char data, unsigned char cs_select) {
 
     spi_message_init(&comedi_ctl.msg);
-    comedi_spi->chip_select = cs_select;
-    comedi_ctl.msg.spi = comedi_spi;
+    comedi_ctl.msg.spi = comedi_spi_ai;
+    if (cs_select == CSnB) comedi_ctl.msg.spi = comedi_spi_ao;
     comedi_ctl.tx_buff[0] = data;
     comedi_ctl.transfer.len = 1;
     comedi_ctl.transfer.tx_buf = comedi_ctl.tx_buff;
@@ -1161,16 +1175,16 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
         if (spi_adc.pic18 > 1) {
-            comedi_do_one_message(CMD_ADC_GO_H + chan, 0);
+            comedi_do_one_message(CMD_ADC_GO_H + chan, CSnA);
             udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
-            comedi_do_one_message(CMD_ADC_DATA, 0);
+            comedi_do_one_message(CMD_ADC_DATA, CSnA);
             data[n] = comedi_ctl.rx_buff[0] << 8;
-            comedi_do_one_message(CMD_DUMMY_CFG, 0);
+            comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
             data[n] += comedi_ctl.rx_buff[0];
         } else {
-            comedi_do_one_message((0b010000 | ((chan & 0x01) << 3)), 0); /* set ADC channel */
+            comedi_do_one_message((0b010000 | ((chan & 0x01) << 3)), CSnA); /* set ADC channel */
             data[n] = (comedi_ctl.rx_buff[0]&0b00000011) << 8;
-            comedi_do_one_message(0, 0);
+            comedi_do_one_message(0, CSnA);
             data[n] += comedi_ctl.rx_buff[0];
         }
 
@@ -1234,12 +1248,12 @@ static int daqgert_ai_config(struct comedi_device *dev,
 
     int pin;
     /* SPI data transfers, send a few dummys for config info */
-    comedi_do_one_message(CMD_DUMMY_CFG, 0);
-    comedi_do_one_message(CMD_DUMMY_CFG, 0);
-    comedi_do_one_message(CMD_DUMMY_CFG, 0);
-    comedi_do_one_message(CMD_DUMMY_CFG, 0);
+    comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
+    comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
+    comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
+    comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
-        comedi_do_one_message(0b010000, 0);
+        comedi_do_one_message(0b010000, CSnA);
         if ((comedi_ctl.rx_buff[0]&0b00000100) == 0) {
             spi_adc.pic18 = 1; /* MCP3002 mode */
             spi_adc.chan = 2;
@@ -1248,10 +1262,10 @@ static int daqgert_ai_config(struct comedi_device *dev,
             dev_info(dev->class_dev,
                     "Gertboard ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i\n",
                     spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18);
-            comedi_do_one_message(0, 0); /* send dummy */
+            comedi_do_one_message(0, CSnA); /* send dummy */
             return spi_adc.chan;
         }
-        comedi_do_one_message(0, 0); /* send dummy */
+        comedi_do_one_message(0, CSnA); /* send dummy */
         spi_adc.pic18 = 0; /* SPI probes found nothing */
         /* look for the gertboard SPI devices .pic18 code 1 */
         dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only.\n");
