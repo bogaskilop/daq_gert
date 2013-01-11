@@ -1178,7 +1178,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages for the type of ADC are we talking to */
-        if (spi_adc.pic18 > 1) { /*  PIC18 device */
+        if (spi_adc.pic18 > 1) { /*  PIC18 SPI slave device */
             comedi_do_one_message(CMD_ADC_GO_H + chan, CSnA, 1);
             udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
             comedi_do_one_message(CMD_ADC_DATA, CSnA, 1);
@@ -1186,7 +1186,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
             comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
             data[n] += comedi_ctl.rx_buff[0];
         } else { /* Gertboard device */
-            comedi_do_one_message((0b01100000 | ((chan & 0x01) << 4)), CSnA, 2); /* set ADC channel SE, 16 bits of data */
+            comedi_do_one_message((0b01100000 | ((chan & 0x01) << 4)), CSnA, 2); /* set ADC channel SE, send two bytes */
             data[n] = (comedi_ctl.rx_buff[0]&0b00000011) << 8; /* two bytes were received from the FIFO */
             data[n] += comedi_ctl.rx_buff[1];
         }
@@ -1201,12 +1201,12 @@ static int daqgert_ao_winsn(struct comedi_device *dev,
     unsigned int chan;
 
     chan = CR_CHAN(insn->chanspec);
-
     for (n = 0; n < insn->n; n++) {
-
-        junk = data[n];
+        junk = data[n]&0xfff; /* strip to 12 bits */
+        comedi_ctl.tx_buff[1] = junk & 0xff; /* load lsb SPI data into transfer buffer */
+        udelay(15); /*  delay */
+        comedi_do_one_message((0b00110000 | ((chan & 0x01) << 7) | (junk >> 8)), CSnB, 2); /* Load DAC channel, send two bytes */
     }
-
     return n;
 }
 
@@ -1217,12 +1217,9 @@ static int daqgert_ao_rinsn(struct comedi_device *dev,
     unsigned int chan;
 
     chan = CR_CHAN(insn->chanspec);
-
     for (n = 0; n < insn->n; n++) {
-
         data[n] = 128;
     }
-
     return n;
 }
 
@@ -1242,6 +1239,7 @@ static int bcm2708_check_pinmode(void) {
     /* lets just say it works for now */
 
     gert_detected = TRUE;
+
     return TRUE;
 }
 
@@ -1289,6 +1287,7 @@ static int daqgert_ai_config(struct comedi_device *dev,
     dev_info(dev->class_dev,
             "PIC spi slave ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i\n",
             spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18);
+
     return spi_adc.chan;
 }
 
@@ -1442,6 +1441,7 @@ static int __init daqgert_init(void) {
     }
     comedi_ctl.rx_buff = kmalloc(SPI_BUFF_SIZE, GFP_KERNEL | GFP_DMA);
     if (!comedi_ctl.rx_buff) {
+
         return -ENOMEM;
     }
     return 0;
