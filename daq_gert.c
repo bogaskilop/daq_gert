@@ -491,7 +491,6 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
                 "setup: cd %d: %d Hz, bpw %u, mode 0x%x\n",
                 spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
                 spi->mode);
-        //        comedi_ctl.msg.spi = comedi_spi_ai;
     }
     if (spi->chip_select == CSnB) { /* we need a device to talk to the DAC */
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
@@ -500,7 +499,6 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
                 "setup: cd %d: %d Hz, bpw %u, mode 0x%x\n",
                 spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
                 spi->mode);
-        //        comedi_ctl.msg.spi = comedi_spi_ao;
     }
 
     if (bs->stopping)
@@ -1251,7 +1249,6 @@ static int daqgert_ai_config(struct comedi_device *dev,
     comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
     comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
     comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
-    //    comedi_do_one_message(CMD_DUMMY_CFG, CSnA,1);
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
         comedi_do_one_message(0b01100000, CSnA, 1); /* check for channel 0 SE */
         detect_code = comedi_ctl.rx_buff[0];
@@ -1263,10 +1260,8 @@ static int daqgert_ai_config(struct comedi_device *dev,
             dev_info(dev->class_dev,
                     "Gertboard ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i, Detect Code %i\n",
                     spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18, detect_code);
-            //            comedi_do_one_message(0, CSnA, 1); /* send dummy */
             return spi_adc.chan;
         }
-        //        comedi_do_one_message(0, CSnA, 1); /* send dummy */
         spi_adc.pic18 = 0; /* SPI probes found nothing */
         /* look for the gertboard SPI devices .pic18 code 1 */
         dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only. Detect Code %i\n",
