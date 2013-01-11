@@ -21,8 +21,8 @@
  */
 #define EXTENDED_AI_CHAN        0
 
-#define CSnA    1       /* GPIO 8  Gertboard ADC */
-#define CSnB    0       /* GPIO 7  Gertboard DAC */
+#define CSnA    0       /* GPIO 8  Gertboard ADC */
+#define CSnB    1       /* GPIO 7  Gertboard DAC */
 
 
 /*
@@ -487,11 +487,19 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
     if (spi->chip_select == CSnA) { /* we need a device to talk to the ADC */
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
         comedi_spi_ai = spi; /* get a copy of the slave device */
+        dev_info(&spi->dev,
+                "setup: cd %d: %d Hz, bpw %u, mode 0x%x\n",
+                spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
+                spi->mode);
         //        comedi_ctl.msg.spi = comedi_spi_ai;
     }
     if (spi->chip_select == CSnB) { /* we need a device to talk to the DAC */
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
         comedi_spi_ao = spi; /* get a copy of the slave device */
+        dev_info(&spi->dev,
+                "setup: cd %d: %d Hz, bpw %u, mode 0x%x\n",
+                spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
+                spi->mode);
         //        comedi_ctl.msg.spi = comedi_spi_ao;
     }
 
@@ -522,11 +530,6 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
         kfree(state);
         spi->controller_state = NULL;
     }
-
-    dev_info(&spi->dev,
-            "setup: cd %d: %d Hz, bpw %u, mode 0x%x -> CS=%08x CDIV=%04x\n",
-            spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
-            spi->mode, state->cs, state->cdiv);
 
     dev_dbg(&spi->dev,
             "setup: cd %d: %d Hz, bpw %u, mode 0x%x -> CS=%08x CDIV=%04x\n",
@@ -1182,7 +1185,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
             comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
             data[n] += comedi_ctl.rx_buff[0];
         } else {
-            comedi_do_one_message((0b010000 | ((chan & 0x01) << 3)), CSnA); /* set ADC channel */
+            comedi_do_one_message((0b01000000 | ((chan & 0x01) << 3)), CSnA); /* set ADC channel */
             data[n] = (comedi_ctl.rx_buff[0]&0b00000011) << 8;
             comedi_do_one_message(0, CSnA);
             data[n] += comedi_ctl.rx_buff[0];
@@ -1246,29 +1249,31 @@ static int bcm2708_check_pinmode(void) {
 static int daqgert_ai_config(struct comedi_device *dev,
         struct comedi_subdevice *s) {
 
-    int pin;
+    int pin, detect_code;
     /* SPI data transfers, send a few dummys for config info */
     comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
     comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
     comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
     comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
-        comedi_do_one_message(0b010000, CSnA);
+        comedi_do_one_message(0b01000000, CSnA);
+        detect_code = comedi_ctl.rx_buff[0];
         if ((comedi_ctl.rx_buff[0]&0b00000100) == 0) {
             spi_adc.pic18 = 1; /* MCP3002 mode */
             spi_adc.chan = 2;
             spi_adc.range = 0; /* range 2.048 */
             spi_adc.bits = 0; /* 10 bits */
             dev_info(dev->class_dev,
-                    "Gertboard ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i\n",
-                    spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18);
+                    "Gertboard ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i, Detect Code %i\n",
+                    spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18, detect_code);
             comedi_do_one_message(0, CSnA); /* send dummy */
             return spi_adc.chan;
         }
         comedi_do_one_message(0, CSnA); /* send dummy */
         spi_adc.pic18 = 0; /* SPI probes found nothing */
         /* look for the gertboard SPI devices .pic18 code 1 */
-        dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only.\n");
+        dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only. Detect Code %i\n",
+                detect_code);
         gert_detected = FALSE;
         for (pin = 7; pin <= 11; pin++) {
             INP_GPIO(pin); /* set mode to GPIO input again */
