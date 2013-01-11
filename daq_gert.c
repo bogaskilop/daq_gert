@@ -78,8 +78,8 @@ WiringPI
  * spi-atmel.c, Copyright (C) 2006 Atmel Corporation
 
 Devices: [] GERTBOARD (daq_gert)
-Status: inprogress (DIO 75%) (AI 60%) AO (5%) (My code cleanup 25%)
-Updated: Wed, 3 Oct 2012 12:07:20 +0000
+Status: inprogress (DIO 95%) (AI 80%) AO (80%) (My code cleanup 55%)
+Updated: Fri, 11 Jan 2013 12:07:20 +0000
 
 The DAQ-GERT appears in Comedi as a  digital I/O subdevice (0) with
 17 or 21 channels, a analog input subdevice (1) with 2 single-ended channels,
@@ -1224,6 +1224,8 @@ static int daqgert_ao_rinsn(struct comedi_device *dev,
 static int bcm2708_check_pinmode(void) {
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
 #define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
+#define GPIO_PULL   *(gpio+37)
+#define GPIO_PULLCLK0 *(gpio+38)
 
     int pin;
 
@@ -1232,12 +1234,22 @@ static int bcm2708_check_pinmode(void) {
         INP_GPIO(pin); /* set mode to GPIO input first */
         SET_GPIO_ALT(pin, 0); /* set mode to ALT 0 */
     }
-    /* look for SPI offboard chip responses */
+    /* look for SPI offboard chip responses later */
     /* Just set gert_detected for now */
-    /* lets just say it works for now */
 
     gert_detected = TRUE;
+    for (pin = 14; pin <= 15; pin++) {
+        INP_GPIO(pin); /* set RS-232 mode to GPIO input again */
+    }
 
+    /* enable pull-up on GPIO */
+    GPIO_PULL = 2;
+    udelay(15); /*  delay */
+    /* clock on GPIO */
+    GPIO_PULLCLK0 = 0x00006003;
+    udelay(15); /*  delay */
+    GPIO_PULL = 0;
+    GPIO_PULLCLK0 = 0;
     return TRUE;
 }
 
