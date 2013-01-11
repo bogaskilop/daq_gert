@@ -1388,7 +1388,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->subdev_flags = SDF_WRITABLE | SDF_GROUND;
         s->n_chan = num_ao_chan;
         s->len_chanlist = num_ao_chan;
-        s->maxdata = (1 << 8) - 1;
+        s->maxdata = (1 << 12) - 1;
         s->range_table = &daqgert_ao_range;
         s->insn_write = daqgert_ao_winsn;
         s->insn_read = daqgert_ao_rinsn;

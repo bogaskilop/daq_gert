@@ -74,7 +74,7 @@ int init_daq(double min_range, double max_range, int range_update) {
         maxdata_ao = comedi_get_maxdata(it, subdev_ao, i);
         printf("Maxdata %i ", maxdata_ao);
         ranges_ao = comedi_get_n_ranges(it, subdev_ao, i);
-        printf("Ranges %i \n", ranges_ao);
+        printf("Ranges %i ", ranges_ao);
         da_range = comedi_get_range(it, subdev_ao, i, ranges_ao - 1);
         printf(": da_range .min = %.3f, max = %.3f\n", da_range->min,
                 da_range->max);
