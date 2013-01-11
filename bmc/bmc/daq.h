@@ -51,7 +51,9 @@ extern "C" {
     int init_daq(double, double, int);
     int init_dio(void);
     int adc_range(double, double);
+    int dac_range(double, double);
     double get_adc_volts(int);
+    int set_dac_volts(int, double);
     int get_dio_bit(int);
     int put_dio_bit(int, int);
     int get_data_sample(void);

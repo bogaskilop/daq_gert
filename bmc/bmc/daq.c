@@ -20,9 +20,9 @@ int range_dio = 0; /* more on this later */
 int maxdata_dio, ranges_dio, channels_dio, datain_dio;
 
 comedi_t *it;
-comedi_range *ad_range;
+comedi_range *ad_range, *da_range;
 int8_t ADC_OPEN = FALSE, DIO_OPEN = FALSE, ADC_ERROR = FALSE, DEV_OPEN = FALSE,
-        DIO_ERROR = FALSE, HAS_AO = FALSE;
+        DIO_ERROR = FALSE, HAS_AO = FALSE, DAC_ERROR = FALSE;
 
 int init_daq(double min_range, double max_range, int range_update) {
     int i = 0;
@@ -75,6 +75,9 @@ int init_daq(double min_range, double max_range, int range_update) {
         printf("Maxdata %i ", maxdata_ao);
         ranges_ao = comedi_get_n_ranges(it, subdev_ao, i);
         printf("Ranges %i \n", ranges_ao);
+        da_range = comedi_get_range(it, subdev_ao, i, ranges_ao - 1);
+        printf(": da_range .min = %.3f, max = %.3f\n", da_range->min,
+                da_range->max);
     }
 
     ADC_OPEN = TRUE;
@@ -90,6 +93,30 @@ int adc_range(double min_range, double max_range) {
     } else {
         return -1;
     }
+}
+
+int dac_range(double min_range, double max_range) {
+    if (ADC_OPEN) {
+        da_range->min = min_range;
+        da_range->max = max_range;
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+int set_dac_volts(int chan, double voltage) {
+    lsampl_t data;
+    int retval;
+
+    DAC_ERROR = FALSE;
+    data = comedi_from_phys(voltage, da_range, maxdata_ao);
+    retval = comedi_data_write(it, subdev_ao, chan, range_ao, aref_ao, &data);
+    if (retval < 0) {
+        comedi_perror("comedi_data_write in set_dac_volts");
+        DAC_ERROR = TRUE;
+    }
+    return retval;
 }
 
 double get_adc_volts(int chan) {
@@ -181,15 +208,15 @@ int get_data_sample(void) {
     for (i = 0; i < 1; i++) { // several samples per reading
         bmc.pv_voltage = lp_filter(get_adc_volts(PVV_C), PVV_C, TRUE);
         bmc.cc_voltage = lp_filter(get_adc_volts(CCV_C), CCV_C, TRUE);
-//        bmc.input_voltage = lp_filter(get_adc_volts(INV_C), INV_C, TRUE);
-//        bmc.b1_voltage = lp_filter(get_adc_volts(B1V_C), B1V_C, TRUE);
-//        bmc.b2_voltage = lp_filter(get_adc_volts(B2V_C), B2V_C, TRUE);
-//        bmc.pv_current = lp_filter(get_adc_volts(PVC_C), PVC_C, TRUE);
-//        bmc.cc_current = lp_filter(get_adc_volts(CCC_C), CCC_C, TRUE);
-//        bmc.battery_current = lp_filter(get_adc_volts(BAC_C), BAC_C, TRUE);
+        //        bmc.input_voltage = lp_filter(get_adc_volts(INV_C), INV_C, TRUE);
+        //        bmc.b1_voltage = lp_filter(get_adc_volts(B1V_C), B1V_C, TRUE);
+        //        bmc.b2_voltage = lp_filter(get_adc_volts(B2V_C), B2V_C, TRUE);
+        //        bmc.pv_current = lp_filter(get_adc_volts(PVC_C), PVC_C, TRUE);
+        //        bmc.cc_current = lp_filter(get_adc_volts(CCC_C), CCC_C, TRUE);
+        //        bmc.battery_current = lp_filter(get_adc_volts(BAC_C), BAC_C, TRUE);
     }
-//    bmc.system_voltage = get_adc_volts(SYV_C);
-//    bmc.logic_voltage = get_adc_volts(VD5_C);
+    //    bmc.system_voltage = get_adc_volts(SYV_C);
+    //    bmc.logic_voltage = get_adc_volts(VD5_C);
 
     bmc.datain.D0 = get_dio_bit(8);
     bmc.datain.D1 = get_dio_bit(9);
@@ -207,6 +234,8 @@ int get_data_sample(void) {
     put_dio_bit(5, bmc.dataout.D5);
     put_dio_bit(6, bmc.dataout.D6);
     put_dio_bit(7, bmc.dataout.D7);
+    set_dac_volts(0, 0.666);
+    set_dac_volts(1, 1.666);
 }
 
 double lp_filter(double new, int bn, int slow) // low pass filter, slow rate of change for new, LPCHANC channels, slow/fast select (-1) to zero channel
