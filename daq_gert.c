@@ -1145,10 +1145,11 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
 /* Create a message to send to the SPI driver */
 static void comedi_spi_msg(unsigned char data, unsigned char cs_select, unsigned char msg_len) {
 
+    if (msg_len > SPI_BUFF_SIZE) msg_len = SPI_BUFF_SIZE;
     spi_message_init(&comedi_ctl.msg);
     comedi_ctl.msg.spi = comedi_spi_ai;
     if (cs_select == CSnB) comedi_ctl.msg.spi = comedi_spi_ao;
-    comedi_ctl.tx_buff[0] = data;
+    comedi_ctl.tx_buff[0] = data; /* we only set 1 byte but can send many */
     comedi_ctl.transfer.len = msg_len;
     comedi_ctl.transfer.tx_buf = comedi_ctl.tx_buff;
     comedi_ctl.transfer.rx_buf = comedi_ctl.rx_buff;
@@ -1176,20 +1177,19 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     chan = CR_CHAN(insn->chanspec);
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
-        /* Make SPI messages */
-        if (spi_adc.pic18 > 1) {
+        /* Make SPI messages for the type of ADC are we talking to */
+        if (spi_adc.pic18 > 1) { /*  PIC18 device */
             comedi_do_one_message(CMD_ADC_GO_H + chan, CSnA, 1);
             udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
             comedi_do_one_message(CMD_ADC_DATA, CSnA, 1);
             data[n] = comedi_ctl.rx_buff[0] << 8;
             comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
             data[n] += comedi_ctl.rx_buff[0];
-        } else {
-            comedi_do_one_message((0b01100000 | ((chan & 0x01) << 4)), CSnA, 2); /* set ADC channel SE */
-            data[n] = (comedi_ctl.rx_buff[0]&0b00000011) << 8;
+        } else { /* Gertboard device */
+            comedi_do_one_message((0b01100000 | ((chan & 0x01) << 4)), CSnA, 2); /* set ADC channel SE, 16 bits of data */
+            data[n] = (comedi_ctl.rx_buff[0]&0b00000011) << 8; /* two bytes were received from the FIFO */
             data[n] += comedi_ctl.rx_buff[1];
         }
-
     }
     return n;
 }
