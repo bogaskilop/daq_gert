@@ -111,7 +111,7 @@ int set_dac_volts(int chan, double voltage) {
 
     DAC_ERROR = FALSE;
     data = comedi_from_phys(voltage, da_range, maxdata_ao);
-    retval = comedi_data_write(it, subdev_ao, chan, range_ao, aref_ao, &data);
+    retval = comedi_data_write(it, subdev_ao, chan, range_ao, aref_ao, data);
     if (retval < 0) {
         comedi_perror("comedi_data_write in set_dac_volts");
         DAC_ERROR = TRUE;
