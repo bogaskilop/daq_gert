@@ -1143,24 +1143,24 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
 }
 
 /* Create a message to send to the SPI driver */
-static void comedi_spi_msg(unsigned char data, unsigned char cs_select) {
+static void comedi_spi_msg(unsigned char data, unsigned char cs_select, unsigned char msg_len) {
 
     spi_message_init(&comedi_ctl.msg);
     comedi_ctl.msg.spi = comedi_spi_ai;
     if (cs_select == CSnB) comedi_ctl.msg.spi = comedi_spi_ao;
     comedi_ctl.tx_buff[0] = data;
-    comedi_ctl.transfer.len = 1;
+    comedi_ctl.transfer.len = msg_len;
     comedi_ctl.transfer.tx_buf = comedi_ctl.tx_buff;
     comedi_ctl.transfer.rx_buf = comedi_ctl.rx_buff;
     spi_message_add_tail(&comedi_ctl.transfer, &comedi_ctl.msg);
 }
 
-/* Have the SPI driver execute our message to the selected slave*/
-static int comedi_do_one_message(unsigned char msgdata, unsigned char cs_select) {
+/* Have the SPI driver execute our message to the selected slave */
+static int comedi_do_one_message(unsigned char msgdata, unsigned char cs_select, unsigned char msg_len) {
     int status;
 
     if (!spi_adc.link) return -ESHUTDOWN;
-    comedi_spi_msg(msgdata, cs_select);
+    comedi_spi_msg(msgdata, cs_select, msg_len);
     status = bcm2708_process_transfer(comedi_bs, &comedi_ctl.msg, &comedi_ctl.transfer);
     return status;
 }
@@ -1178,17 +1178,17 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages */
         if (spi_adc.pic18 > 1) {
-            comedi_do_one_message(CMD_ADC_GO_H + chan, CSnA);
+            comedi_do_one_message(CMD_ADC_GO_H + chan, CSnA, 1);
             udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
-            comedi_do_one_message(CMD_ADC_DATA, CSnA);
+            comedi_do_one_message(CMD_ADC_DATA, CSnA, 1);
             data[n] = comedi_ctl.rx_buff[0] << 8;
-            comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
+            comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
             data[n] += comedi_ctl.rx_buff[0];
         } else {
-            comedi_do_one_message((0b01000000 | ((chan & 0x01) << 3)), CSnA); /* set ADC channel */
+            comedi_do_one_message((0b01000000 | ((chan & 0x01) << 5)), CSnA, 2); /* set ADC channel */
             data[n] = (comedi_ctl.rx_buff[0]&0b00000011) << 8;
-            comedi_do_one_message(0, CSnA);
-            data[n] += comedi_ctl.rx_buff[0];
+            //            comedi_do_one_message(0, CSnA, 1);
+            data[n] += comedi_ctl.rx_buff[1];
         }
 
     }
@@ -1251,12 +1251,12 @@ static int daqgert_ai_config(struct comedi_device *dev,
 
     int pin, detect_code;
     /* SPI data transfers, send a few dummys for config info */
-    comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
-    comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
-    comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
-    comedi_do_one_message(CMD_DUMMY_CFG, CSnA);
+    comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
+    comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
+    comedi_do_one_message(CMD_DUMMY_CFG, CSnA, 1);
+    //    comedi_do_one_message(CMD_DUMMY_CFG, CSnA,1);
     if ((comedi_ctl.rx_buff[0]&0b11000000) != 0b01000000) {
-        comedi_do_one_message(0b01000000, CSnA);
+        comedi_do_one_message(0b01000000, CSnA, 1);
         detect_code = comedi_ctl.rx_buff[0];
         if ((comedi_ctl.rx_buff[0]&0b00000100) == 0) {
             spi_adc.pic18 = 1; /* MCP3002 mode */
@@ -1266,10 +1266,10 @@ static int daqgert_ai_config(struct comedi_device *dev,
             dev_info(dev->class_dev,
                     "Gertboard ADC chip Board Detected, %i Channels, Range code %i, Bits code %i, PIC code %i, Detect Code %i\n",
                     spi_adc.chan, spi_adc.range, spi_adc.bits, spi_adc.pic18, detect_code);
-            comedi_do_one_message(0, CSnA); /* send dummy */
+            comedi_do_one_message(0, CSnA, 1); /* send dummy */
             return spi_adc.chan;
         }
-        comedi_do_one_message(0, CSnA); /* send dummy */
+        comedi_do_one_message(0, CSnA, 1); /* send dummy */
         spi_adc.pic18 = 0; /* SPI probes found nothing */
         /* look for the gertboard SPI devices .pic18 code 1 */
         dev_info(dev->class_dev, "No GERT Board Found, GPIO pins only. Detect Code %i\n",
@@ -1441,8 +1441,10 @@ static int __init daqgert_init(void) {
     if (!comedi_ctl.tx_buff) {
         return -ENOMEM;
     }
-    comedi_ctl.rx_buff = comedi_ctl.tx_buff;
-
+    comedi_ctl.rx_buff = kmalloc(SPI_BUFF_SIZE, GFP_KERNEL | GFP_DMA);
+    if (!comedi_ctl.rx_buff) {
+        return -ENOMEM;
+    }
     return 0;
 }
 module_init(daqgert_init);
@@ -1451,6 +1453,8 @@ static void __exit daqgert_exit(void) {
 
     if (comedi_ctl.tx_buff)
         kfree(comedi_ctl.tx_buff);
+    if (comedi_ctl.rx_buff)
+        kfree(comedi_ctl.rx_buff);
 
     comedi_driver_unregister(&daqgert_driver);
 }
