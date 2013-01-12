@@ -1136,10 +1136,10 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
 
     switch (data[0]) {
         case INSN_CONFIG_DIO_OUTPUT:
-            s->io_bits |= 1 << (chan);
+            s->io_bits |= chan;
             break;
         case INSN_CONFIG_DIO_INPUT:
-            s->io_bits &= ~(1 << (chan));
+            s->io_bits &= (~chan);
             break;
         case INSN_CONFIG_DIO_QUERY:
             data[1] = (s->io_bits & chan) ? COMEDI_OUTPUT : COMEDI_INPUT;
