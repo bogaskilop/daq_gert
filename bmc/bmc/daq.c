@@ -133,6 +133,14 @@ double get_adc_volts(int chan) {
     return comedi_to_phys(data, ad_range, maxdata_ai);
 }
 
+int set_dio_input(int chan)
+{
+    return comedi_dio_config(it,
+ 	subdev_dio,
+ 	chan,
+ 	COMEDI_INPUT);
+}
+
 int get_dio_bit(int chan) {
     lsampl_t data;
     int retval;
@@ -234,8 +242,6 @@ int get_data_sample(void) {
     put_dio_bit(5, bmc.dataout.D5);
     put_dio_bit(6, bmc.dataout.D6);
     put_dio_bit(7, bmc.dataout.D7);
-    set_dac_volts(0, 0.666);
-    set_dac_volts(1, 1.666);
 }
 
 double lp_filter(double new, int bn, int slow) // low pass filter, slow rate of change for new, LPCHANC channels, slow/fast select (-1) to zero channel

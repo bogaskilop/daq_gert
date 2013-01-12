@@ -1094,50 +1094,67 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
     int pinWPi;
-    if (data[0]) {
+
+    if (data[0]) { /* write data to pin */
         s->state &= ~data[0];
         s->state |= (data[0] & data[1]);
+        /* s->state contains the GPIO bits */
+        /* s->io_bits contains the GPIO direction */
 
-        if (data[0] & 0xff) { /* Any data to change from all bit 0's [0..7] */
+        if (data[0] & 0xfffff) { /* Any data to change from all bit 0's [0..7] */
             /* OUT testing with gpio pins  */
             /* We need to shift a single bit from state to set or clear the GPIO */
             for (pinWPi = 0; pinWPi <= 7; pinWPi++) {
-                digitalWriteWPi(pinWPi,
-                        (s->state & (0x01 << pinWPi)) >> pinWPi);
+                if (((s->io_bits >> pinWPi) &0x01) == COMEDI_OUTPUT) { /* only OUT config'd pins */
+                    digitalWriteWPi(pinWPi,
+                            (s->state & (0x01 << pinWPi)) >> pinWPi);
+                }
             }
         }
     }
 
-    data[1] = s->state & 0xff;
+    data[1] = s->state & 0xfffff;
     /* IN testing with gpio pins  8..16 or 20 */
     /* Rev #1 num_dio_chan 17 ,Rev #2 num_dio_pins 21 */
     for (pinWPi = 8; pinWPi < num_dio_chan; pinWPi++) {
-        if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
-            /* Do nothing on SPI AUX pins*/
-        } else data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift */
+        if (((s->io_bits >> pinWPi) &0x01) == COMEDI_INPUT) { /* only IN config'g pins */
+            if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
+                /* Do nothing on SPI AUX pins*/
+            } else {
+                data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift */
+            }
+        }
     }
     return insn->n;
 }
 
+/* query or change DIO config */
 static int daqgert_dio_insn_config(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
     unsigned int chan = 1 << CR_CHAN(insn->chanspec);
 
     switch (data[0]) {
-        case INSN_CONFIG_DIO_INPUT:
-            break;
         case INSN_CONFIG_DIO_OUTPUT:
+            s->io_bits |= 1 << (chan);
+            break;
+        case INSN_CONFIG_DIO_INPUT:
+            s->io_bits &= ~(1 << (chan));
             break;
         case INSN_CONFIG_DIO_QUERY:
             data[1] = (s->io_bits & chan) ? COMEDI_OUTPUT : COMEDI_INPUT;
-
-            break;
+            return insn->n;
         default:
             return -EINVAL;
     }
+    dev_info(dev->class_dev, "%s: %s iobase 0x%lx, ioremap 0x%lx, GPIO wpipins setting 0x%x\n",
+            dev->driver->driver_name,
+            dev->board_name,
+            dev->iobase,
+            (long unsigned int) gpio,
+            (unsigned int) s->io_bits);
+    return 1;
 
-    return insn->n;
 }
 
 /* Create a message to send to the SPI driver */
@@ -1229,6 +1246,15 @@ static int bcm2708_check_pinmode(void) {
 
     int pin;
 
+    /* enable pull-up on GPIO */
+    GPIO_PULL = 2;
+    udelay(50); /*  delay */
+    /* clock on GPIO */
+    GPIO_PULLCLK0 = 0x0000c403;
+    udelay(50); /*  delay */
+    GPIO_PULL = 0;
+    GPIO_PULLCLK0 = 0;
+
     /* SPI is on GPIO 7..11 */
     for (pin = 7; pin <= 11; pin++) {
         INP_GPIO(pin); /* set mode to GPIO input first */
@@ -1242,14 +1268,6 @@ static int bcm2708_check_pinmode(void) {
         INP_GPIO(pin); /* set RS-232 mode to GPIO input again */
     }
 
-    /* enable pull-up on GPIO */
-    GPIO_PULL = 2;
-    udelay(15); /*  delay */
-    /* clock on GPIO */
-    GPIO_PULLCLK0 = 0x00006003;
-    udelay(15); /*  delay */
-    GPIO_PULL = 0;
-    GPIO_PULLCLK0 = 0;
     return TRUE;
 }
 
@@ -1308,7 +1326,7 @@ static int daqgert_ao_config(struct comedi_device *dev,
 static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it) {
     const struct daqgert_board *thisboard = comedi_board(dev);
     struct comedi_subdevice *s;
-    int ret, num_subdev = 1, i;
+    int ret, num_subdev = 1, i, d;
 
     /* Use the kernel system_rev EXPORT_SYMBOL */
     RPisys_rev = system_rev; /* what board are we running on? */
@@ -1363,7 +1381,8 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
     s->insn_bits = daqgert_dio_insn_bits;
     s->insn_config = daqgert_dio_insn_config;
     s->state = 0;
-    s->io_bits = 0x00ff;
+    s->io_bits = 0x00ff; /* start with first 8 bits as outputs */
+    d = s->io_bits;
 
     if (num_subdev > 1) { /* we have the SPI ADC DAC on board */
         /* daq-gert ai */
@@ -1401,11 +1420,12 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->insn_read = daqgert_ao_rinsn;
     }
 
-    dev_info(dev->class_dev, "%s: %s iobase 0x%lx, ioremap 0x%lx\n",
+    dev_info(dev->class_dev, "%s: %s iobase 0x%lx, ioremap 0x%lx, GPIO wpipins 0x%x\n",
             dev->driver->driver_name,
             dev->board_name,
             dev->iobase,
-            (long unsigned int) gpio);
+            (long unsigned int) gpio,
+            (unsigned int) d);
 
     return 0;
 }

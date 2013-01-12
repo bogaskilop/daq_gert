@@ -56,6 +56,7 @@ extern "C" {
     int set_dac_volts(int, double);
     int get_dio_bit(int);
     int put_dio_bit(int, int);
+    int set_dio_input(int);
     int get_data_sample(void);
     double lp_filter(double, int, int);
 #ifdef	__cplusplus
