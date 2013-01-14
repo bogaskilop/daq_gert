@@ -1106,14 +1106,14 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
         /* OUT testing with gpio pins  */
         /* We need to shift a single bit from state to set or clear the GPIO */
         for (pinWPi = 0; pinWPi < num_dio_chan; pinWPi++) {
-            if (((s->io_bits >> pinWPi) &0x01) == COMEDI_OUTPUT) { /* only OUT config'd pins */
-                if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
-                    /* Do nothing on SPI AUX pins*/
-                } else {
-                    digitalWriteWPi(pinWPi,
-                            (s->state & (0x01 << pinWPi)) >> pinWPi);
-                }
+            //            if (((s->io_bits >> pinWPi) &0x01) == COMEDI_OUTPUT) { /* only OUT config'd pins */
+            if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
+                /* Do nothing on SPI AUX pins*/
+            } else {
+                digitalWriteWPi(pinWPi,
+                        (s->state & (0x01 << pinWPi)) >> pinWPi);
             }
+            //            }
         }
         //        }
     }
@@ -1122,13 +1122,13 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
     /* IN testing with gpio pins */
     /* Rev #1 num_dio_chan 17 ,Rev #2 num_dio_pins 21 */
     for (pinWPi = 0; pinWPi < num_dio_chan; pinWPi++) {
-        if (((s->io_bits >> pinWPi) &0x01) == COMEDI_INPUT) { /* only IN config'g pins */
-            if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
-                /* Do nothing on SPI AUX pins*/
-            } else {
-                data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift */
-            }
+        //        if (((s->io_bits >> pinWPi) &0x01) == COMEDI_INPUT) { /* only IN config'g pins */
+        if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
+            /* Do nothing on SPI AUX pins*/
+        } else {
+            data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift */
         }
+        //        }
     }
     return insn->n;
 }

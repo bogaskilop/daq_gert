@@ -133,12 +133,11 @@ double get_adc_volts(int chan) {
     return comedi_to_phys(data, ad_range, maxdata_ai);
 }
 
-int set_dio_input(int chan)
-{
+int set_dio_input(int chan) {
     return comedi_dio_config(it,
- 	subdev_dio,
- 	chan,
- 	COMEDI_INPUT);
+            subdev_dio,
+            chan,
+            COMEDI_INPUT);
 }
 
 int get_dio_bit(int chan) {
@@ -226,14 +225,14 @@ int get_data_sample(void) {
     //    bmc.system_voltage = get_adc_volts(SYV_C);
     //    bmc.logic_voltage = get_adc_volts(VD5_C);
 
-    bmc.datain.D0 = get_dio_bit(8);     // GPIO 0/2
-    bmc.datain.D1 = get_dio_bit(9);     // 1/3
-    bmc.datain.D2 = get_dio_bit(10);
-    bmc.datain.D3 = get_dio_bit(11);
+    bmc.datain.D0 = get_dio_bit(8); // GPIO 0/2
+    bmc.datain.D1 = get_dio_bit(9); // GPIO 1/3
+    bmc.datain.D2 = get_dio_bit(0); // read output bit wpi 0
+    bmc.datain.D3 = get_dio_bit(1); // read output bit wpi 1
     bmc.datain.D4 = get_dio_bit(12);
     bmc.datain.D5 = get_dio_bit(13);
-    bmc.datain.D6 = get_dio_bit(15); /* GPIO 14 */
-    bmc.datain.D7 = get_dio_bit(16); /* GPIO 15 */
+    bmc.datain.D6 = get_dio_bit(15); // GPIO 14 
+    bmc.datain.D7 = get_dio_bit(16); // GPIO 15 
     put_dio_bit(0, bmc.dataout.D0);
     put_dio_bit(1, bmc.dataout.D1);
     put_dio_bit(2, bmc.dataout.D2);
