@@ -1102,33 +1102,24 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
         /* s->state contains the GPIO bits */
         /* s->io_bits contains the GPIO direction */
 
-        //        if (data[0] & 0xffffff) { /* Any data to change from all bit 0's */
         /* OUT testing with gpio pins  */
         /* We need to shift a single bit from state to set or clear the GPIO */
         for (pinWPi = 0; pinWPi < num_dio_chan; pinWPi++) {
-            //            if (((s->io_bits >> pinWPi) &0x01) == COMEDI_OUTPUT) { /* only OUT config'd pins */
-            if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
-                /* Do nothing on SPI AUX pins*/
-            } else {
+            if (!(gert_detected && ((pinWPi >= 10) && (pinWPi <= 14)))) {
+                /* Do nothing on SPI AUX pins when detected */
                 digitalWriteWPi(pinWPi,
                         (s->state & (0x01 << pinWPi)) >> pinWPi);
             }
-            //            }
         }
-        //        }
     }
 
     data[1] = s->state & 0xffffff;
     /* IN testing with gpio pins */
     /* Rev #1 num_dio_chan 17 ,Rev #2 num_dio_pins 21 */
     for (pinWPi = 0; pinWPi < num_dio_chan; pinWPi++) {
-        //        if (((s->io_bits >> pinWPi) &0x01) == COMEDI_INPUT) { /* only IN config'g pins */
-        if (gert_detected && (pinWPi >= 10 && pinWPi <= 14)) {
-            /* Do nothing on SPI AUX pins*/
-        } else {
+        if (!(gert_detected && ((pinWPi >= 10) && (pinWPi <= 14)))) {
             data[1] |= digitalReadWPi(pinWPi) << pinWPi; /* shift */
         }
-        //        }
     }
     return insn->n;
 }
@@ -1137,16 +1128,20 @@ static int daqgert_dio_insn_bits(struct comedi_device *dev,
 static int daqgert_dio_insn_config(struct comedi_device *dev,
         struct comedi_subdevice *s,
         struct comedi_insn *insn, unsigned int *data) {
-    unsigned int chan = 1 << CR_CHAN(insn->chanspec);
+    unsigned int wpi_pin = CR_CHAN(insn->chanspec), chan = 1 << wpi_pin;
 
     switch (data[0]) {
         case INSN_CONFIG_DIO_OUTPUT:
-            s->io_bits |= chan;
-            pinModeWPi(CR_CHAN(insn->chanspec), OUTPUT);
+            if (!(gert_detected && ((wpi_pin >= 10) && (wpi_pin <= 14)))) {
+                s->io_bits |= chan;
+                pinModeWPi(wpi_pin, OUTPUT);
+            }
             break;
         case INSN_CONFIG_DIO_INPUT:
-            s->io_bits &= (~chan);
-            pinModeWPi(CR_CHAN(insn->chanspec), INPUT);
+            if (!(gert_detected && ((wpi_pin >= 10) && (wpi_pin <= 14)))) {
+                s->io_bits &= (~chan);
+                pinModeWPi(wpi_pin, INPUT);
+            }
             break;
         case INSN_CONFIG_DIO_QUERY:
             data[1] = (s->io_bits & chan) ? COMEDI_OUTPUT : COMEDI_INPUT;
@@ -1154,8 +1149,7 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
         default:
             return -EINVAL;
     }
-    dev_info(dev->class_dev, "%s: %s GPIO wpi-pins setting 0x%x\n",
-            dev->driver->driver_name,
+    dev_info(dev->class_dev, "%s: GPIO wpi-pins setting 0x%x\n",
             dev->board_name,
             (unsigned int) s->io_bits);
     return 1;
