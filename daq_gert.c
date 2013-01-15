@@ -1419,9 +1419,8 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->insn_read = daqgert_ao_rinsn;
     }
 
-    dev_info(dev->class_dev, "%s: %s iobase 0x%lx, ioremap 0x%lx, GPIO wpi-pins 0x%x\n",
+    dev_info(dev->class_dev, "%s: GPIO iobase 0x%lx, ioremap 0x%lx, GPIO wpi-pins 0x%x\n",
             dev->driver->driver_name,
-            dev->board_name,
             dev->iobase,
             (long unsigned int) gpio,
             (unsigned int) d);
