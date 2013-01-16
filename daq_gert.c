@@ -74,7 +74,7 @@ WiringPI
 
 Devices: [] GERTBOARD (daq_gert)
 Status: inprogress (DIO 95%) (AI 80%) AO (80%) (My code cleanup 55%)
-Updated: Fri, 11 Jan 2013 12:07:20 +0000
+Updated: Fri, 15 Jan 2013 12:07:20 +0000
 
 The DAQ-GERT appears in Comedi as a  digital I/O subdevice (0) with
 17 or 21 channels, a analog input subdevice (1) with 2 single-ended channels,
