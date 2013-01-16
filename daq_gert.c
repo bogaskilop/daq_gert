@@ -19,11 +19,6 @@
  *     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-#define EXTENDED_AI_CHAN        0
-
-#define CSnA    0       /* GPIO 8  Gertboard ADC */
-#define CSnB    1       /* GPIO 7  Gertboard DAC */
-
 
 /*
 Driver: "experimental" daq_gert in progress ...
@@ -195,6 +190,9 @@ struct pic_platform_data {
 static struct pic_platform_data pic_info_pic18 = {
     .conv_delay_usecs = 35
 };
+
+#define CSnA    0       /* GPIO 8  Gertboard ADC */
+#define CSnB    1       /* GPIO 7  Gertboard DAC */
 
 #define SPI_BUFF_SIZE 16
 
@@ -487,7 +485,7 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
     if (spi->chip_select == CSnA) { /* we need a device to talk to the ADC */
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
         comedi_spi_ai = spi; /* get a copy of the slave device */
-        dev_info(&spi->dev,
+        dev_dbg(&spi->dev,
                 "setup: cd %d: %d Hz, bpw %u, mode 0x%x\n",
                 spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
                 spi->mode);
@@ -495,7 +493,7 @@ static int bcm2708_spi_setup(struct spi_device *spi) {
     if (spi->chip_select == CSnB) { /* we need a device to talk to the DAC */
         spi->mode = SPI_CS_CS_10 | SPI_CS_CS_01; /* mode 3 */
         comedi_spi_ao = spi; /* get a copy of the slave device */
-        dev_info(&spi->dev,
+        dev_dbg(&spi->dev,
                 "setup: cd %d: %d Hz, bpw %u, mode 0x%x\n",
                 spi->chip_select, spi->max_speed_hz, spi->bits_per_word,
                 spi->mode);
@@ -1149,7 +1147,7 @@ static int daqgert_dio_insn_config(struct comedi_device *dev,
         default:
             return -EINVAL;
     }
-    dev_info(dev->class_dev, "%s: GPIO wpi-pins setting 0x%x\n",
+    dev_dbg(dev->class_dev, "%s: GPIO wpi-pins setting 0x%x\n",
             dev->board_name,
             (unsigned int) s->io_bits);
     return 1;
@@ -1247,10 +1245,10 @@ static int bcm2708_check_pinmode(void) {
 
     /* enable pull-up on GPIO */
     GPIO_PULL = 2;
-    udelay(50); /*  delay */
+    udelay(50);
     /* clock on GPIO */
     GPIO_PULLCLK0 = 0x0000c403;
-    udelay(50); /*  delay */
+    udelay(50);
     GPIO_PULL = 0;
     GPIO_PULLCLK0 = 0;
 
@@ -1419,7 +1417,7 @@ static int daqgert_attach(struct comedi_device *dev, struct comedi_devconfig *it
         s->insn_read = daqgert_ao_rinsn;
     }
 
-    dev_info(dev->class_dev, "%s: GPIO iobase 0x%lx, ioremap 0x%lx, GPIO wpi-pins 0x%x\n",
+    dev_info(dev->class_dev, "%s attached: GPIO iobase 0x%lx, ioremap 0x%lx, GPIO wpi-pins 0x%x\n",
             dev->driver->driver_name,
             dev->iobase,
             (long unsigned int) gpio,
