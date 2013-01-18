@@ -10,27 +10,33 @@
  * 25k22
  * Pins C0,C1 are the diag LED pins.
  * SPI 2 has been config'd as the slave with chip select.
- * The I/O and clock pins
- * have been interconnected in the standard way for a PIC18F8722 chip
+ * DIP8 Pins for MCP3002 header
+ * Pin 21   RB0	SPI Chip-Select	Pin 1
+ * Pin 22   RB1	SPI Clock	Pin 7
+ * Pin 23   RB2	SPI Data In	Pin 5
+ * Pin 24   RB3	SPI Data Out	Pin 6
+ * Pin 8    Vss			Pin 4
+ * Pin 20   Vdd			Pin 8
+ * Pin 2    RA0	ANA0		Pin 2
+ * Pin 3    RA1	ANA1		Pin 2
+ * The I/O and clock pins IDC connector pins
+ * have been interconnected in the standard way for a PIC18F8722 chip EET Board
  *
  * Version	0.06 P25K22 Set PIC speed to 64mhz and use have ADC use FOSC_64,12_TAD
  *		     P8722 have ADC use FOSC_32,12_TAD
  *		0.05 Fixed the P25K22 version to work correctly.
  *		0.04 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
- *		The target hardware for field use will be the pic18f25k22
- *		due to its 28 pin dip format, BUT is not currenetly being
- *		tested.
  *		define the CPU type below.
  *
  *		The WatchDog and timer0 are used to check link status
  *		and to reset the chip if hung or confused.
  *
- * nsaspook@nsaspook.com    Oct 2012
+ * nsaspook@nsaspook.com    Jan 2013
  */
 
-//#define P25K22
-#define P8722
+#define P25K22
+//#define P8722
 
 #ifdef P8722
 #include "xlcd.h"
@@ -220,8 +226,8 @@ void InterruptHandlerHigh(void)
 	TMR0L = timer.bt[LOW]; // Write low byte to Timer0
 	/* if we are just idle don't reset the PIC */
 	if ((slave_int_count - last_slave_int_count) < SLAVE_ACTIVE) {
-	    ClrWdt(); // reset the WDT timer
-	    DLED1 = HIGH;
+	    _asm clrwdt _endasm // reset the WDT timer
+		    DLED1 = HIGH;
 	    DLED2 = HIGH;
 	    DLED3 = HIGH;
 	    DLED4 = HIGH;
@@ -294,7 +300,7 @@ void InterruptHandlerHigh(void)
 		}
 		DLED5 = !DLED5;
 		last_slave_int_count = slave_int_count;
-		ClrWdt(); // reset the WDT timer
+		_asm clrwdt _endasm // reset the WDT timer
 		REMOTE_LINK = TRUE;
 		link = TRUE;
 		DLED0 = HIGH;
@@ -542,7 +548,7 @@ void main(void) /* SPI Master/Slave loopback */
     }
 #endif
 
-    while (1) { // just loop and output results on DIAG LCD
+    while (1) { // just loop and output results on DIAG LCD for 8722
 
 	if (SSP2CON1bits.WCOL || SSP2CON1bits.SSPOV) { // check for overruns/collisions
 #ifdef P8722
