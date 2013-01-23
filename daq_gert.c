@@ -24,7 +24,11 @@
 Driver: "experimental" daq_gert in progress ...
  * 
  * 
+<<<<<<< HEAD
  *  Added daq_gert.o to the COMEDI_MISC_DRIVERS
+=======
+ *  Added daq_gert.o to the
+>>>>>>> a4621a3f1990f36cdd6a9943ea8aa18e9787b6bf
  *  comedi/drivers/Makefile
  *  obj-$(CONFIG_COMEDI_DAQ_GERT)           += daq_gert.o
  *  Added ARM to the comedi Kconfig file
@@ -39,8 +43,11 @@ Driver: "experimental" daq_gert in progress ...
           Enable support a wide range of data acquisition devices
           for Linux.
  
+<<<<<<< HEAD
 * section COMEDI_MISC_DRIVERS
 
+=======
+>>>>>>> a4621a3f1990f36cdd6a9943ea8aa18e9787b6bf
 config COMEDI_DAQ_GERT
         tristate "GERTBOARD support"
         depends on COMEDI_KCOMEDILIB
