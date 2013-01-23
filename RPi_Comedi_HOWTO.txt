@@ -172,6 +172,7 @@ buffer length is 0, good
 
 At this point a program that uses the comedi lib should work:
 
+daqgert_test
 ./bmc/bmc/dist/Debug/GNU-Linux-x86/bmc
 
 Subdev AI  1 Analog  Channels 16 Maxdata 1023 Ranges 1 : ad_range .min = 0.0, max = 3.3
