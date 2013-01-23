@@ -10,27 +10,34 @@
  * 25k22
  * Pins C0,C1 are the diag LED pins.
  * SPI 2 has been config'd as the slave with chip select.
- * The I/O and clock pins
- * have been interconnected in the standard way for a PIC18F8722 chip
+ * DIP8 Pins for MCP3002 header
+ * Pin 21   RB0	SPI Chip-Select	Pin 1
+ * Pin 22   RB1	SPI Clock	Pin 7
+ * Pin 23   RB2	SPI Data In	Pin 5
+ * Pin 24   RB3	SPI Data Out	Pin 6
+ * Pin 8    Vss			Pin 4
+ * Pin 20   Vdd			Pin 8
+ * Pin 2    RA0	ANA0		Pin 2
+ * Pin 3    RA1	ANA1		Pin 2
+ * The I/O and clock pins IDC connector pins
+ * have been interconnected in the standard way for a PIC18F8722 chip EET Board
  *
- * Version	0.06 P25K22 Set PIC speed to 64mhz and use have ADC use FOSC_64,12_TAD
- *		     P8722 have ADC use FOSC_32,12_TAD
+ * Version	0.7 minor software cleanups.
+ *		0.06 P25K22 Set PIC speed to 64mhz and use have ADC use FOSC_64,12_TAD
+ *		P8722 have ADC use FOSC_32,12_TAD
  *		0.05 Fixed the P25K22 version to work correctly.
  *		0.04 The testing hardware is mainly a pic18f8722 with a
  *		LCD display and PORTE bit leds.
- *		The target hardware for field use will be the pic18f25k22
- *		due to its 28 pin dip format, BUT is not currenetly being
- *		tested.
  *		define the CPU type below.
  *
  *		The WatchDog and timer0 are used to check link status
  *		and to reset the chip if hung or confused.
  *
- * nsaspook@nsaspook.com    Oct 2012
+ * nsaspook@nsaspook.com    Jan 2013
  */
 
-//#define P25K22
-#define P8722
+#define P25K22
+//#define P8722
 
 #ifdef P8722
 #include "xlcd.h"
@@ -173,10 +180,19 @@ struct lcdb {
     int8_t b[LCDW_SIZE];
 };
 
+struct spi_link_type {
+    uint8_t SPI_DATA : 1;
+    uint8_t ADC_DATA : 1;
+    uint8_t REMOTE_LINK : 1;
+    uint8_t REMOTE_DATA_DONE : 1;
+    uint8_t LOW_BITS : 1;
+};
+volatile struct spi_link_type spi_adc = {FALSE, FALSE, FALSE, FALSE, FALSE};
+
 const rom int8_t *build_date = __DATE__, *build_time = __TIME__;
 volatile uint8_t data_in2, adc_buffer_ptr = 0,
-	adc_channel = 0, SPI_DATA = FALSE, ADC_DATA = FALSE,
-	REMOTE_LINK = FALSE, REMOTE_DATA_DONE = FALSE, LOW_BITS = FALSE;
+	adc_channel = 0;
+
 volatile uint8_t dsi = 0; // LCD virtual console number
 volatile uint32_t adc_count = 0, adc_error_count = 0,
 	slave_int_count = 0, last_slave_int_count = 0;
@@ -220,8 +236,8 @@ void InterruptHandlerHigh(void)
 	TMR0L = timer.bt[LOW]; // Write low byte to Timer0
 	/* if we are just idle don't reset the PIC */
 	if ((slave_int_count - last_slave_int_count) < SLAVE_ACTIVE) {
-	    ClrWdt(); // reset the WDT timer
-	    DLED1 = HIGH;
+	    _asm clrwdt _endasm // reset the WDT timer
+		    DLED1 = HIGH;
 	    DLED2 = HIGH;
 	    DLED3 = HIGH;
 	    DLED4 = HIGH;
@@ -230,7 +246,7 @@ void InterruptHandlerHigh(void)
 	    DLED7 = HIGH;
 	}
 	link = FALSE;
-	REMOTE_LINK = FALSE;
+	spi_adc.REMOTE_LINK = FALSE;
 	DLED0 = LOW;
     }
 
@@ -243,7 +259,7 @@ void InterruptHandlerHigh(void)
 	} else {
 	    SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
 	}
-	ADC_DATA = TRUE;
+	spi_adc.ADC_DATA = TRUE;
 	DLED1 = !DLED1;
     }
 
@@ -271,13 +287,13 @@ void InterruptHandlerHigh(void)
 #endif
 	    if (!ADCON0bits.GO) {
 		ADCON0 = ((channel << 2) & 0b00111100) | (ADCON0 & 0b11000011);
-		ADC_DATA = FALSE;
+		spi_adc.ADC_DATA = FALSE;
 		ADCON0bits.GO = HIGH; // start a conversion
 		DLED2 = !DLED2;
 	    } else {
 		ADCON0bits.GO = LOW; // stop a conversion
 		SSP2BUF = CMD_DUMMY; // Tell master  we are here
-		ADC_DATA = FALSE;
+		spi_adc.ADC_DATA = FALSE;
 		DLED3 = !DLED3;
 	    }
 	}
@@ -294,8 +310,8 @@ void InterruptHandlerHigh(void)
 		}
 		DLED5 = !DLED5;
 		last_slave_int_count = slave_int_count;
-		ClrWdt(); // reset the WDT timer
-		REMOTE_LINK = TRUE;
+		_asm clrwdt _endasm // reset the WDT timer
+			spi_adc.REMOTE_LINK = TRUE;
 		link = TRUE;
 		DLED0 = HIGH;
 		/* reset link data timer if we are talking */
@@ -542,7 +558,7 @@ void main(void) /* SPI Master/Slave loopback */
     }
 #endif
 
-    while (1) { // just loop and output results on DIAG LCD
+    while (1) { // just loop and output results on DIAG LCD for 8722
 
 	if (SSP2CON1bits.WCOL || SSP2CON1bits.SSPOV) { // check for overruns/collisions
 #ifdef P8722
@@ -556,8 +572,8 @@ void main(void) /* SPI Master/Slave loopback */
 	for (i = 0; i < 1; i++) {
 	    for (j = 0; j < 1; j++) {
 #ifdef P8722
-		if ((((k++) % 10000) == 0) || !REMOTE_LINK) {
-		    if (REMOTE_LINK) {
+		if ((((k++) % 10000) == 0) || !spi_adc.REMOTE_LINK) {
+		    if (spi_adc.REMOTE_LINK) {
 			sprintf(bootstr2,
 				"SPI U%i %b          ",
 				num_ai_chan, stuff);
@@ -568,7 +584,7 @@ void main(void) /* SPI Master/Slave loopback */
 				last_slave_int_count, slave_int_count);
 			LCD_VC_puts(VC0, DS2, YES);
 		    }
-		    if (ADC_DATA) {
+		    if (spi_adc.ADC_DATA) {
 			sprintf(bootstr2,
 				"The ADC is Done         "
 				);
@@ -581,7 +597,7 @@ void main(void) /* SPI Master/Slave loopback */
 		    }
 		    sprintf(bootstr2,
 			    "R%u Err %lu, #%lu, I%lu    ",
-			    (int) REMOTE_LINK, adc_error_count, adc_count, slave_int_count);
+			    (int) spi_adc.REMOTE_LINK, adc_error_count, adc_count, slave_int_count);
 		    LCD_VC_puts(VC0, DS0, YES);
 		    sprintf(bootstr2,
 			    "A %u %u, I%u     ",

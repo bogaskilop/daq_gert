@@ -76,7 +76,7 @@ WiringPI
 
 Devices: [] GERTBOARD (daq_gert)
 Status: inprogress (DIO 95%) (AI 80%) AO (80%) (My code cleanup 55%)
-Updated: Fri, 15 Jan 2013 12:07:20 +0000
+Updated: Fri, 18 Jan 2013 12:07:20 +0000
 
 The DAQ-GERT appears in Comedi as a  digital I/O subdevice (0) with
 17 or 21 channels, a analog input subdevice (1) with 2 single-ended channels,
@@ -1192,6 +1192,7 @@ static int daqgert_ai_rinsn(struct comedi_device *dev,
     /* convert n samples */
     for (n = 0; n < insn->n; n++) {
         /* Make SPI messages for the type of ADC are we talking to */
+        /* The PIC Slave needs 8 bit transfers only */
         if (spi_adc.pic18 > 1) { /*  PIC18 SPI slave device */
             comedi_do_one_message(CMD_ADC_GO_H + chan, CSnA, 1);
             udelay(pic_data->conv_delay_usecs); /* ADC conversion delay */
