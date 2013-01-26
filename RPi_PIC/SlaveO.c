@@ -86,9 +86,10 @@
 #define	TIMEROFFSET	26474           // timer0 16bit counter value for 1 second to overflow
 #define SLAVE_ACTIVE	10		// Activity counter level
 
+/* PIC Slave commands */
 #define CMD_ADC_GO	0b10000000
 #define CMD_ADC_GO_H	0b11000000
-#define CMD_ADC_DONE	0b11110000
+#define CMD_ADC_DIAG	0b11110000
 #define CMD_ADC_DATA	0b10010000
 
 #define CMD_DUMMY_CFG	0b01000000

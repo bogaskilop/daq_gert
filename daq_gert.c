@@ -55,7 +55,7 @@ config COMEDI_DAQ_GERT
 Description: GERTBOARD daq-gert
 Author: Fred Brooks <nsaspook@nsaspook.com>
  * 
-Most of the actual GPIO,AI,AO code was copied from
+Most of the actual GPIO setup code was copied from
  * 
 WiringPI 
 
@@ -198,9 +198,11 @@ static struct pic_platform_data pic_info_pic18 = {
 
 #define SPI_BUFF_SIZE 16
 
+/* PIC Slave commands */
 #define CMD_ADC_GO	0b10000000      // send data low byte first
 #define CMD_ADC_GO_H	0b11000000      // send data high byte first
 #define CMD_ADC_DATA	0b10010000
+#define CMD_ADC_DIAG	0b11110000
 #define CMD_DUMMY_CFG	0b01000000
 
 /* SPI register offsets */
