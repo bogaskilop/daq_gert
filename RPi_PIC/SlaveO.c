@@ -192,11 +192,11 @@ volatile struct spi_link_type spi_adc = {FALSE, FALSE, FALSE, FALSE, FALSE};
 
 const rom int8_t *build_date = __DATE__, *build_time = __TIME__;
 volatile uint8_t data_in2, adc_buffer_ptr = 0,
-	adc_channel = 0;
+        adc_channel = 0;
 
 volatile uint8_t dsi = 0; // LCD virtual console number
 volatile uint32_t adc_count = 0, adc_error_count = 0,
-	slave_int_count = 0, last_slave_int_count = 0;
+        slave_int_count = 0, last_slave_int_count = 0;
 volatile uint16_t adc_buffer[64] = {0}, adc_data_in = 0;
 #pragma udata gpr13
 far int8_t bootstr2[MESG_W + 1];
@@ -210,11 +210,10 @@ void InterruptHandlerHigh(void);
 //High priority interrupt vector
 #pragma code InterruptVectorHigh = 0x08
 
-void InterruptVectorHigh(void)
-{
+void InterruptVectorHigh(void) {
     _asm
-    goto InterruptHandlerHigh //jump to interrupt routine
-	    _endasm
+            goto InterruptHandlerHigh //jump to interrupt routine
+            _endasm
 }
 
 //----------------------------------------------------------------------------
@@ -223,126 +222,123 @@ void InterruptVectorHigh(void)
 #pragma code
 #pragma interrupt InterruptHandlerHigh
 
-void InterruptHandlerHigh(void)
-{
+void InterruptHandlerHigh(void) {
     static uint8_t channel = 0, link, upper, command;
     static union Timers timer;
 
     if (INTCONbits.TMR0IF) { // check timer0 irq 1 second timer int handler
-	INTCONbits.TMR0IF = LOW; //clear interrupt flag
-	//check for TMR0 overflow
+        INTCONbits.TMR0IF = LOW; //clear interrupt flag
+        //check for TMR0 overflow
 
-	timer.lt = TIMEROFFSET; // Copy timer value into union
-	TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
-	TMR0L = timer.bt[LOW]; // Write low byte to Timer0
-	/* if we are just idle don't reset the PIC */
-	if ((slave_int_count - last_slave_int_count) < SLAVE_ACTIVE) {
-	    _asm clrwdt _endasm // reset the WDT timer
-		    DLED1 = HIGH;
-	    DLED2 = HIGH;
-	    DLED3 = HIGH;
-	    DLED4 = HIGH;
-	    DLED5 = HIGH;
-	    DLED6 = HIGH;
-	    DLED7 = HIGH;
-	}
-	link = FALSE;
-	spi_adc.REMOTE_LINK = FALSE;
-	DLED0 = LOW;
+        timer.lt = TIMEROFFSET; // Copy timer value into union
+        TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
+        TMR0L = timer.bt[LOW]; // Write low byte to Timer0
+        /* if we are just idle don't reset the PIC */
+        if ((slave_int_count - last_slave_int_count) < SLAVE_ACTIVE) {
+            _asm clrwdt _endasm // reset the WDT timer
+            DLED1 = HIGH;
+            DLED2 = HIGH;
+            DLED3 = HIGH;
+            DLED4 = HIGH;
+            DLED5 = HIGH;
+            DLED6 = HIGH;
+            DLED7 = HIGH;
+        }
+        link = FALSE;
+        spi_adc.REMOTE_LINK = FALSE;
+        DLED0 = LOW;
     }
 
     if (PIR1bits.ADIF) { // ADC conversion complete flag
-	PIR1bits.ADIF = LOW;
-	adc_count++; // just keep count
-	adc_buffer[channel] = ADRES;
-	if (upper) {
-	    SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
-	} else {
-	    SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
-	}
-	spi_adc.ADC_DATA = TRUE;
-	DLED1 = !DLED1;
+        PIR1bits.ADIF = LOW;
+        adc_count++; // just keep count
+        adc_buffer[channel] = ADRES;
+        if (upper) {
+            SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
+        } else {
+            SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
+        }
+        spi_adc.ADC_DATA = TRUE;
+        DLED1 = !DLED1;
     }
 
     /* we only get this when the master  wants data, the slave never generates one */
     if (PIR3bits.SSP2IF) { // SPI port #2 SLAVE receiver
-	PIR3bits.SSP2IF = LOW;
-	slave_int_count++;
-	data_in2 = SSP2BUF;
-	command = data_in2 & 0xf0;
-	if ((command == CMD_ADC_GO) || (command == CMD_ADC_GO_H)) { // Found a GO command
-	    if ((data_in2 & 0b01000000) > 0) {
-		upper = TRUE;
-		DLED7 = LOW;
-	    } else {
-		upper = FALSE;
-		DLED7 = HIGH;
-	    }
-	    channel = data_in2 & 0x0f;
+        PIR3bits.SSP2IF = LOW;
+        slave_int_count++;
+        data_in2 = SSP2BUF;
+        command = data_in2 & 0xf0;
+        if ((command == CMD_ADC_GO) || (command == CMD_ADC_GO_H)) { // Found a GO command
+            if ((data_in2 & 0b01000000) > 0) {
+                upper = TRUE;
+                DLED7 = LOW;
+            } else {
+                upper = FALSE;
+                DLED7 = HIGH;
+            }
+            channel = data_in2 & 0x0f;
 #ifdef P25K22
-	    if (channel > 4) channel += 7; // skip missing channels
-	    if (channel > 19) channel = 0; // invalid to set to 0
+            if (channel > 4) channel += 7; // skip missing channels
+            if (channel > 19) channel = 0; // invalid to set to 0
 #endif
 #ifdef P8722
-	    if (channel > 11) channel = 0; // invalid so set to 0
+            if (channel > 11) channel = 0; // invalid so set to 0
 #endif
-	    if (!ADCON0bits.GO) {
-		ADCON0 = ((channel << 2) & 0b00111100) | (ADCON0 & 0b11000011);
-		spi_adc.ADC_DATA = FALSE;
-		ADCON0bits.GO = HIGH; // start a conversion
-		DLED2 = !DLED2;
-	    } else {
-		ADCON0bits.GO = LOW; // stop a conversion
-		SSP2BUF = CMD_DUMMY; // Tell master  we are here
-		spi_adc.ADC_DATA = FALSE;
-		DLED3 = !DLED3;
-	    }
-	}
-	if (data_in2 == CMD_DUMMY_CFG) {
-	    SSP2BUF = CMD_DUMMY; // Tell master  we are here
-	    DLED4 = !DLED4;
-	}
-	if (data_in2 == CMD_ADC_DATA) {
-	    if (!ADCON0bits.GO) {
-		if (upper) {
-		    SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
-		} else {
-		    SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
-		}
-		DLED5 = !DLED5;
-		last_slave_int_count = slave_int_count;
-		_asm clrwdt _endasm // reset the WDT timer
-			spi_adc.REMOTE_LINK = TRUE;
-		link = TRUE;
-		DLED0 = HIGH;
-		/* reset link data timer if we are talking */
-		timer.lt = TIMEROFFSET; // Copy timer value into union
-		TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
-		TMR0L = timer.bt[LOW]; // Write low byte to Timer0
-		INTCONbits.TMR0IF = LOW; //clear possible interrupt flag
-	    } else {
-		DLED6 = !DLED6;
-		SSP2BUF = CMD_DUMMY;
-	    }
-	}
+            if (!ADCON0bits.GO) {
+                ADCON0 = ((channel << 2) & 0b00111100) | (ADCON0 & 0b11000011);
+                spi_adc.ADC_DATA = FALSE;
+                ADCON0bits.GO = HIGH; // start a conversion
+                DLED2 = !DLED2;
+            } else {
+                ADCON0bits.GO = LOW; // stop a conversion
+                SSP2BUF = CMD_DUMMY; // Tell master  we are here
+                spi_adc.ADC_DATA = FALSE;
+                DLED3 = !DLED3;
+            }
+        }
+        if (data_in2 == CMD_DUMMY_CFG) {
+            SSP2BUF = CMD_DUMMY; // Tell master  we are here
+            DLED4 = !DLED4;
+        }
+        if (data_in2 == CMD_ADC_DATA) {
+            if (!ADCON0bits.GO) {
+                if (upper) {
+                    SSP2BUF = (uint8_t) adc_buffer[channel]; // stuff with lower 8 bits
+                } else {
+                    SSP2BUF = (uint8_t) (adc_buffer[channel] >> 8); // stuff with upper 8 bits
+                }
+                DLED5 = !DLED5;
+                last_slave_int_count = slave_int_count;
+                _asm clrwdt _endasm // reset the WDT timer
+                spi_adc.REMOTE_LINK = TRUE;
+                link = TRUE;
+                DLED0 = HIGH;
+                /* reset link data timer if we are talking */
+                timer.lt = TIMEROFFSET; // Copy timer value into union
+                TMR0H = timer.bt[HIGH]; // Write high byte to Timer0
+                TMR0L = timer.bt[LOW]; // Write low byte to Timer0
+                INTCONbits.TMR0IF = LOW; //clear possible interrupt flag
+            } else {
+                DLED6 = !DLED6;
+                SSP2BUF = CMD_DUMMY;
+            }
+        }
     }
 
 }
 #pragma code
 
-void wdtdelay(unsigned long delay)
-{
+void wdtdelay(unsigned long delay) {
     static uint32_t dcount;
     for (dcount = 0; dcount <= delay; dcount++) { // delay a bit
-	Nop();
-	ClrWdt(); // reset the WDT timer
+        Nop();
+        ClrWdt(); // reset the WDT timer
     };
 }
 
 #ifdef P8722
 
-void DelayFor18TCY(void)
-{
+void DelayFor18TCY(void) {
     static uint8_t n;
     _asm nop _endasm // asm code to disable compiler optimizations
     for (n = 0; n < lcd18; n++) Nop(); // works at 200 (slow white) or 24 (fast blue)
@@ -369,27 +365,27 @@ void LCD_VC_puts(unsigned char console, unsigned char line, unsigned char COPY) 
     static uint8_t ib = 0;
 
     if (COPY) {
-	ib = console + line; // set to string index to store data in LCD message array ds[x].b
-	strncpypgm2ram(ds[ib].b, "                        ", LCD_W); // write 20 space chars
-	strncpy(ds[ib].b, bootstr2, LCD_W); // move data from static buffer in lcd message array
-	ds[ib].b[LCD_W] = 0; // make sure we have a string terminator
+        ib = console + line; // set to string index to store data in LCD message array ds[x].b
+        strncpypgm2ram(ds[ib].b, "                        ", LCD_W); // write 20 space chars
+        strncpy(ds[ib].b, bootstr2, LCD_W); // move data from static buffer in lcd message array
+        ds[ib].b[LCD_W] = 0; // make sure we have a string terminator
     }
     switch (line) {
-    case DS0:
-	SetDDRamAddr(LL1); // move to  line
-	break;
-    case DS1:
-	SetDDRamAddr(LL2); // move to  line
-	break;
-    case DS2:
-	SetDDRamAddr(LL3); // move to  line
-	break;
-    case DS3:
-	SetDDRamAddr(LL4); // move to  line
-	break;
-    default:
-	SetDDRamAddr(LL1); // move to  line 1 of out of range
-	break;
+        case DS0:
+            SetDDRamAddr(LL1); // move to  line
+            break;
+        case DS1:
+            SetDDRamAddr(LL2); // move to  line
+            break;
+        case DS2:
+            SetDDRamAddr(LL3); // move to  line
+            break;
+        case DS3:
+            SetDDRamAddr(LL4); // move to  line
+            break;
+        default:
+            SetDDRamAddr(LL1); // move to  line 1 of out of range
+            break;
     }
     ib = dsi + line; // set to string index to display on LCD, dsi GLOBAL is the current VC being displayed
 
@@ -398,27 +394,25 @@ void LCD_VC_puts(unsigned char console, unsigned char line, unsigned char COPY) 
     while (BusyXLCD());
 }
 
-void init_lcd(void)
-{
+void init_lcd(void) {
     lcd18 = 200;
     wdtdelay(10000); // delay for power related LCD setup glitch
     if (BusyXLCD()) {
-	OpenXLCD(FOUR_BIT & LINES_5X7);
-	while (BusyXLCD());
-	wdtdelay(10000); // delay for power related LCD setup glitch
-	OpenXLCD(FOUR_BIT & LINES_5X7);
-	while (BusyXLCD());
-	WriteCmdXLCD(0xc); // blink, cursor off
-	while (BusyXLCD());
-	WriteCmdXLCD(0x1); // clear screen
-	wdtdelay(10000);
-	lcd18 = 24;
+        OpenXLCD(FOUR_BIT & LINES_5X7);
+        while (BusyXLCD());
+        wdtdelay(10000); // delay for power related LCD setup glitch
+        OpenXLCD(FOUR_BIT & LINES_5X7);
+        while (BusyXLCD());
+        WriteCmdXLCD(0xc); // blink, cursor off
+        while (BusyXLCD());
+        WriteCmdXLCD(0x1); // clear screen
+        wdtdelay(10000);
+        lcd18 = 24;
     }
 }
 #endif
 
-void config_pic(void)
-{
+void config_pic(void) {
 #ifdef P8722
     TRISBbits.TRISB4 = 1; // QEI encoder inputs
     TRISBbits.TRISB5 = 1;
@@ -527,8 +521,7 @@ void config_pic(void)
 
 }
 
-void main(void) /* SPI Master/Slave loopback */
-{
+void main(void) /* SPI Master/Slave loopback */ {
     int16_t i, j, k = 0, num_ai_chan = 0;
     uint8_t stuff;
 
@@ -540,74 +533,74 @@ void main(void) /* SPI Master/Slave loopback */
     LCD_VC_puts(VC0, DS0, YES);
     /* show build data on LCD */
     for (i = 0; i < 1000; i++) {
-	for (j = 0; j < 500; j++) {
-	    ClrWdt(); // reset the WDT timer
-	}
+        for (j = 0; j < 500; j++) {
+            ClrWdt(); // reset the WDT timer
+        }
     }
     sprintf(bootstr2,
-	    "nsaspook                    "
-	    );
+            "nsaspook                    "
+            );
     LCD_VC_puts(VC0, DS0, YES);
     strncpypgm2ram(bootstr2, build_date, LCD_W);
     LCD_VC_puts(VC0, DS1, YES);
 
     /* show build data on LCD */
     for (i = 0; i < 1000; i++) {
-	for (j = 0; j < 500; j++) {
-	    ClrWdt(); // reset the WDT timer
-	}
+        for (j = 0; j < 500; j++) {
+            ClrWdt(); // reset the WDT timer
+        }
     }
 #endif
 
     while (1) { // just loop and output results on DIAG LCD for 8722
 
-	if (SSP2CON1bits.WCOL || SSP2CON1bits.SSPOV) { // check for overruns/collisions
+        if (SSP2CON1bits.WCOL || SSP2CON1bits.SSPOV) { // check for overruns/collisions
 #ifdef P8722
-	    LATHbits.LATH0 = !LATHbits.LATH0;
+            LATHbits.LATH0 = !LATHbits.LATH0;
 #endif
-	    SSP2CON1bits.WCOL = SSP2CON1bits.SSPOV = 0;
-	    adc_error_count = adc_count - adc_error_count;
-	}
+            SSP2CON1bits.WCOL = SSP2CON1bits.SSPOV = 0;
+            adc_error_count = adc_count - adc_error_count;
+        }
 
 
-	for (i = 0; i < 1; i++) {
-	    for (j = 0; j < 1; j++) {
+        for (i = 0; i < 1; i++) {
+            for (j = 0; j < 1; j++) {
 #ifdef P8722
-		if ((((k++) % 10000) == 0) || !spi_adc.REMOTE_LINK) {
-		    if (spi_adc.REMOTE_LINK) {
-			sprintf(bootstr2,
-				"SPI U%i %b          ",
-				num_ai_chan, stuff);
-			LCD_VC_puts(VC0, DS2, YES);
-		    } else {
-			sprintf(bootstr2,
-				"SPI D%lu %lu         ",
-				last_slave_int_count, slave_int_count);
-			LCD_VC_puts(VC0, DS2, YES);
-		    }
-		    if (spi_adc.ADC_DATA) {
-			sprintf(bootstr2,
-				"The ADC is Done         "
-				);
-			LCD_VC_puts(VC0, DS3, YES);
-		    } else {
-			sprintf(bootstr2,
-				"The ADC is Working             "
-				);
-			LCD_VC_puts(VC0, DS3, YES);
-		    }
-		    sprintf(bootstr2,
-			    "R%u Err %lu, #%lu, I%lu    ",
-			    (int) spi_adc.REMOTE_LINK, adc_error_count, adc_count, slave_int_count);
-		    LCD_VC_puts(VC0, DS0, YES);
-		    sprintf(bootstr2,
-			    "A %u %u, I%u     ",
-			    adc_buffer[0], adc_buffer[1], data_in2);
-		    LCD_VC_puts(VC0, DS1, YES);
-		}
+                if ((((k++) % 10000) == 0) || !spi_adc.REMOTE_LINK) {
+                    if (spi_adc.REMOTE_LINK) {
+                        sprintf(bootstr2,
+                                "SPI U%i %b          ",
+                                num_ai_chan, stuff);
+                        LCD_VC_puts(VC0, DS2, YES);
+                    } else {
+                        sprintf(bootstr2,
+                                "SPI D%lu %lu         ",
+                                last_slave_int_count, slave_int_count);
+                        LCD_VC_puts(VC0, DS2, YES);
+                    }
+                    if (spi_adc.ADC_DATA) {
+                        sprintf(bootstr2,
+                                "The ADC is Done         "
+                                );
+                        LCD_VC_puts(VC0, DS3, YES);
+                    } else {
+                        sprintf(bootstr2,
+                                "The ADC is Working             "
+                                );
+                        LCD_VC_puts(VC0, DS3, YES);
+                    }
+                    sprintf(bootstr2,
+                            "R%u Err %lu, #%lu, I%lu    ",
+                            (int) spi_adc.REMOTE_LINK, adc_error_count, adc_count, slave_int_count);
+                    LCD_VC_puts(VC0, DS0, YES);
+                    sprintf(bootstr2,
+                            "A %u %u, I%u     ",
+                            adc_buffer[0], adc_buffer[1], data_in2);
+                    LCD_VC_puts(VC0, DS1, YES);
+                }
 #endif
-	    }
-	}
+            }
+        }
 
     }
 
